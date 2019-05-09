@@ -1,0 +1,6 @@
+fonction test(entier i, entier j): entier
+    ecrire("oui")
+    lire(a)
+fin
+algorithme test
+fin
