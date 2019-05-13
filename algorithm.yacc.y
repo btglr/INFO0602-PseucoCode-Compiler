@@ -19,19 +19,18 @@ hash_table_t table;
 
 %union {
 	int integer;
-	char string[256];
-	char variable[256];
-	char output[512];
+	char type[64];
+	char *variable;
+	char *string;
 }
 
-%token<output> BEGIN_ALGORITHM END BEGIN_FUNCTION BEGIN_PROCEDURE
+%token BEGIN_ALGORITHM END BEGIN_FUNCTION BEGIN_PROCEDURE
 %token<string> FOR WHILE IF ELSE WRITE_OUTPUT READ_INPUT DO THEN RETURN FROM TO STEP
-%token<string> VARIABLE_TYPE
-%token<string> COMPARISON_OPERATOR OPERATION_OPERATOR ASSIGNMENT_OPERATOR OPERATOR_DIVIDE OPERATOR_MINUS OPERATOR_MODULO OPERATOR_MULTIPLY OPERATOR_PLUS
-%token<string> OPENING_PARENTHESIS CLOSING_PARENTHESIS
+%token<type> VARIABLE_TYPE
+%token<string> COMPARISON_OPERATOR OPERATOR_DIVIDE OPERATOR_MINUS OPERATOR_MODULO OPERATOR_MULTIPLY OPERATOR_PLUS NOT
 %token<integer> BOOLEAN INT
 %token<variable> VARIABLE
-%token<output> STRING
+%token<string> STRING
 %type<integer> plus_minus
 %type<integer> multiply_divide
 %type<integer> number
@@ -55,15 +54,13 @@ algorithm:
 	;
 
 function:
-	BEGIN_FUNCTION VARIABLE parameters
- ':' VARIABLE_TYPE '\n' {
+	BEGIN_FUNCTION VARIABLE parameters ':' VARIABLE_TYPE '\n' {
 		/* Fonction Nom(type nomParam[, type nomParam]) : typeRetour */
 		generate_function($2, $3, $5);
 	} expression END {
 		end_function();
 	} '\n' function
-	| BEGIN_PROCEDURE VARIABLE parameters
- '\n' {
+	| BEGIN_PROCEDURE VARIABLE parameters '\n' {
 		/* Procédure Nom(type nomParam[, type nomParam]) */
 		generate_function($2, $3, "void");
 	} expression END {
@@ -72,34 +69,76 @@ function:
 	| ;
 
 parameters:
-	OPENING_PARENTHESIS argument CLOSING_PARENTHESIS {
+	'(' argument ')' {
 		/* Correspond à un argument de fonction/procédure */
-		snprintf($$, sizeof($$), "%s", $2);
-		/* $$ = $2; */
+
+		if (($$ = strdup($2)) == NULL) {
+			fprintf(stderr, "Erreur, mémoire insuffisante\n");
+			exit(EXIT_FAILURE);
+		}
+
+		free($2);
 	}
-	| OPENING_PARENTHESIS STRING CLOSING_PARENTHESIS {
-		strcpy($$, $2);
+	| '(' STRING ')' {
 		/* Correspond à un appel de fonction (Ex: Ecrire("test")) */
+
+		if (($$ = strdup($2)) == NULL) {
+			fprintf(stderr, "Erreur, mémoire insuffisante\n");
+			exit(EXIT_FAILURE);
+		}
+
+		printf("String: %s\n", $$);
+		free($2);
 	}
-	| OPENING_PARENTHESIS VARIABLE CLOSING_PARENTHESIS {
-		strcpy($$, $2);
+	| '(' VARIABLE ')' {
 		/*
 		Correspond à un appel de fonction (Ex: Lire(a) ou Ecrire(a))
 		Faire en sorte que ce soit possible d'appeler une fonction avec plusieurs arguments : pgcd(x, y)
+
+		arguments: règle qui prend [soit un type et une variable, soit une variable], n fois
+
 		*/
+
+		if (($$ = strdup($2)) == NULL) {
+			fprintf(stderr, "Erreur, mémoire insuffisante\n");
+			exit(EXIT_FAILURE);
+		}
+
+		printf("Variable: %s\n", $$);
+		free($2);
 	}
 	;
 
 argument:
 	VARIABLE_TYPE VARIABLE ',' argument {
-		snprintf($$, sizeof($$), "%s %s, %s", $1, $2, $4);
+		size_t length = strlen($1) + strlen($2) + strlen($4) + 4;
+
+		if (($$ = (char*) malloc(sizeof(char) * length)) == NULL) {
+			fprintf(stderr, "Erreur, mémoire insuffisante\n");
+			exit(EXIT_FAILURE);
+		}
+
+		snprintf($$, length, "%s %s, %s", $1, $2, $4);
 		printf("\t{Parameter: %s} : {Type: %s}\n", $2, $1);
+
+		free($2);
+		free($4);
 	}
 	| VARIABLE_TYPE VARIABLE {
-		snprintf($$, sizeof($$), "%s %s", $1, $2);
+		size_t length = strlen($1) + strlen($2) + 2;
+		
+		if (($$ = (char*) malloc(sizeof(char) * length)) == NULL) {
+			fprintf(stderr, "Erreur, mémoire insuffisante\n");
+			exit(EXIT_FAILURE);
+		}
+
+		snprintf($$, length, "%s %s", $1, $2);
 		printf("\t{Parameter: %s} : {Type: %s}\n", $2, $1);
+
+		free($2);
 	}
 	| {
+		$$ = (char*) malloc(sizeof(char));
 		strcpy($$, "");
 	}
 	;
@@ -139,18 +178,85 @@ declaration:
 		else {
 			cell->value = $3;
 		}
+
+		/*
+		Ajouter $$ = $3 pour l'assignation et comparaison ?
+		Ex: (a = 2) == 0
+		*/
 	}
 	;
 
 instruction:
-	WRITE_OUTPUT parameters
- {
+	WRITE_OUTPUT parameters {
 		fprintf(r, "printf(%s);\n", $2);
 	}
-	| READ_INPUT parameters
- {
-		fprintf(r, "scanf(\"%%d\", \&%s);\n", $2);
+	| READ_INPUT '(' VARIABLE ')' {
+		/* Si la variable n'est pas encore existante elle est ajoutée à la table de hachage et déclarée en C */
+		if (findHashTable(&table, $3) == NULL) {
+			cell_t *cell = (cell_t*) malloc(sizeof(cell_t));
+			initializeCell(cell, $3, 0);
+			insertHashTable(&table, cell);
+
+			fprintf(r, "int %s;\n", $3);
+		}
+
+		/* Puis ensuite on effectue le scanf */
+		fprintf(r, "scanf(\"%%d\", &%s);\n", $3);
 	}
+	| condition
+	| loop
+	| RETURN value
+	| RETURN
+	;
+
+condition:
+	IF VARIABLE COMPARISON_OPERATOR value THEN {
+
+	} '\n' expression ELSE {
+
+	} '\n' expression END IF
+	| IF boolean_expression THEN {
+		/* Equivalent à if(true), je sais pas si c'est nécessaire d'ajouter ça */
+
+	} '\n' expression ELSE {
+
+	} '\n' expression END IF
+	;
+
+loop:
+	while_loop
+	| for_loop
+	;
+
+while_loop:
+	WHILE plus_minus COMPARISON_OPERATOR plus_minus DO {
+		printf("\tDébut tant que avec opération\n");
+	} '\n' expression END WHILE
+	| WHILE boolean_expression DO {
+
+	} '\n' expression END WHILE {
+
+	}
+	;
+
+for_loop:
+	FOR VARIABLE FROM INT TO INT DO {
+
+	} '\n' expression END FOR
+	| FOR VARIABLE FROM INT TO INT STEP INT DO {
+
+	} '\n' expression END FOR
+	;
+
+value:
+	VARIABLE
+	| INT
+	| boolean_expression
+	;
+
+boolean_expression:
+	BOOLEAN
+	| NOT BOOLEAN
 	;
 
 plus_minus:
@@ -176,13 +282,18 @@ multiply_divide:
 		$$ = $1 * $3;
 	}
 	| multiply_divide OPERATOR_MODULO number {
-		$$ = $1 % $3;
+		if ($3 == 0) {
+			yyerror("Division par zero via modulo");
+		}
+		else {
+			$$ = $1 % $3;
+		}
 	}
 	| number
 	;
 
 number:
-	OPENING_PARENTHESIS plus_minus CLOSING_PARENTHESIS {
+	'(' plus_minus ')' {
 		$$ = $2;
 	}
 	| OPERATOR_MINUS INT {
@@ -195,7 +306,7 @@ number:
 		cell_t *cell;
 
 		if ((cell = findHashTable(&table, $1)) == NULL) {
-			printf("Erreur: variable inexistante\n");
+			yyerror("Variable inexistante");
 		}
 
 		else {
@@ -253,7 +364,12 @@ void generate_function(char *name, char *args, char *return_type) {
 			}
 		}
 	}
+
 	fprintf(r, ") {\n");
+
+	free(name);
+	free(args);
+	free(copy);
 }
 
 void start_main() {
