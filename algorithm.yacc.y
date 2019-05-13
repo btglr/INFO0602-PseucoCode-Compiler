@@ -35,7 +35,7 @@ hash_table_t table;
 %type<integer> plus_minus
 %type<integer> multiply_divide
 %type<integer> number
-%type<string> inside_parenthesis
+%type<string> parameters
 %type<string> argument
 
 %%
@@ -55,13 +55,15 @@ algorithm:
 	;
 
 function:
-	BEGIN_FUNCTION VARIABLE inside_parenthesis ':' VARIABLE_TYPE '\n' {
+	BEGIN_FUNCTION VARIABLE parameters
+ ':' VARIABLE_TYPE '\n' {
 		/* Fonction Nom(type nomParam[, type nomParam]) : typeRetour */
 		generate_function($2, $3, $5);
 	} expression END {
 		end_function();
 	} '\n' function
-	| BEGIN_PROCEDURE VARIABLE inside_parenthesis '\n' {
+	| BEGIN_PROCEDURE VARIABLE parameters
+ '\n' {
 		/* Procédure Nom(type nomParam[, type nomParam]) */
 		generate_function($2, $3, "void");
 	} expression END {
@@ -69,7 +71,7 @@ function:
 	} '\n' function
 	| ;
 
-inside_parenthesis:
+parameters:
 	OPENING_PARENTHESIS argument CLOSING_PARENTHESIS {
 		/* Correspond à un argument de fonction/procédure */
 		snprintf($$, sizeof($$), "%s", $2);
@@ -141,10 +143,12 @@ declaration:
 	;
 
 instruction:
-	WRITE_OUTPUT inside_parenthesis {
+	WRITE_OUTPUT parameters
+ {
 		fprintf(r, "printf(%s);\n", $2);
 	}
-	| READ_INPUT inside_parenthesis {
+	| READ_INPUT parameters
+ {
 		fprintf(r, "scanf(\"%%d\", \&%s);\n", $2);
 	}
 	;
