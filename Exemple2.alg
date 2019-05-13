@@ -1,4 +1,4 @@
-Fonction PGCD(entier 1, entier j) : entier
+Fonction PGCD(entier i, entier j) : entier
   a = i
   b = j
   Tant que b != 0 Faire
