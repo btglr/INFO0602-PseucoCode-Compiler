@@ -1,5 +1,5 @@
 algorithm: y.tab.o lex.yy.o hashTable.o list.o cell.o
-	gcc -o algorithm y.tab.o lex.yy.o hashTable.o list.o cell.o -lm -lfl
+	gcc -o algorithm.out y.tab.o lex.yy.o hashTable.o list.o cell.o -lm -lfl
 
 cell.o: libs/cell.h libs/cell.c
 	gcc -c libs/cell.c
@@ -25,7 +25,7 @@ lex.yy.c : algorithm.l
 clean:
 	rm -f y.tab.*
 	rm -f lex.yy.*
-	rm -f algorithm algorithm.exe
+	rm -f algorithm algorithm.exe algorithm.out
 	rm -f *.o
 	rm -f *~
 	rm -f *.stackdump
