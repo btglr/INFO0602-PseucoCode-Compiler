@@ -4,3 +4,4 @@ y.tab.h
 lex.yy.c
 *.out
 y.output
+*.bin
