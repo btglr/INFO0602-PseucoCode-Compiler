@@ -1,0 +1,12 @@
+| VARIABLE OPERATOR_PLUS STRING {
+		char tmp[256];
+		int i;
+		
+		strcpy(tmp,"\"%d");
+		for(i=0;$3[i];i++){
+			$3[i] = $3[i+1];
+		}
+		printf("%s\n",$3);
+		snprintf($$, sizeof($$), "%s %s,%s", tmp,$3,$1);
+		
+	}
