@@ -3,17 +3,20 @@
 
 #include "list.h"
 
-typedef struct {
+typedef struct hashTable {
+    char *name;
     list_t *list;
     int tabSize;
-} hash_table_t;
+
+    struct hashTable *prev, *next;
+} hashTable_t;
 
 int convertStringToInt(char *str);
 int hash(int k, int size);
-void initializeHashTable(hash_table_t*, int);
-void destroyHashTable(hash_table_t*);
-void insertHashTable(hash_table_t*, cell_t*);
-cell_t* findHashTable(hash_table_t*, char*);
-void removeFromHashTable(hash_table_t*, cell_t*);
+void initializeHashTable(hashTable_t*, char*, int);
+void destroyHashTable(hashTable_t*);
+void insertHashTable(hashTable_t*, cell_t*);
+cell_t* findHashTable(hashTable_t*, char*);
+void removeFromHashTable(hashTable_t*, cell_t*);
 
 #endif

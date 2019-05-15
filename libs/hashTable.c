@@ -6,37 +6,40 @@ int hash(int k, int size) {
     return k % size;
 }
 
-void initializeHashTable(hash_table_t *ht, int size) {
+void initializeHashTable(hashTable_t *ht, char* name, int size) {
     int i;
 
+    ht->name = strdup(name);
     ht->list = (list_t*) malloc(sizeof(list_t) * size);
     ht->tabSize = size;
+    ht->prev = NULL;
+    ht->next = NULL;
 
     for(i = 0; i < size; ++i) {
         initializeList(&ht->list[i]);
     }
 }
 
-void destroyHashTable(hash_table_t *ht) {
+void destroyHashTable(hashTable_t *ht) {
     destroyList(ht->list);
     /* free(ht); */
 }
 
-void insertHashTable(hash_table_t *ht, cell_t *cell) {
+void insertHashTable(hashTable_t *ht, cell_t *cell) {
     int nb = convertStringToInt(cell->name);
     int ind = hash(nb, ht->tabSize);
 
     insertList(&ht->list[ind], cell);
 }
 
-cell_t *findHashTable(hash_table_t *ht, char *mot) {
+cell_t *findHashTable(hashTable_t *ht, char *mot) {
     int nb = convertStringToInt(mot);
     int ind = hash(nb, ht->tabSize);
 
     return findList(&ht->list[ind], mot);
 }
 
-void removeFromHashTable(hash_table_t *th, cell_t *cell) {
+void removeFromHashTable(hashTable_t *th, cell_t *cell) {
     int nb = convertStringToInt(cell->name);
     int ind = hash(nb, th->tabSize);
 
