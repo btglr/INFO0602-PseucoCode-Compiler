@@ -1,6 +1,11 @@
 #include "codeGenerator.h"
 #include <stdlib.h>
 
+void include_librairies(FILE *r) {
+    fprintf(r, "#include <stdio.h>\n");
+    fprintf(r, "#include <stdlib.h>\n\n");
+}
+
 void start_void_function(FILE *r, char *name, function_t *func) {
     start_function(r, name, func, TYPE_VOID);
 }
@@ -22,11 +27,7 @@ void start_function(FILE *r, char *name, function_t *func, variable_type return_
             break;
     }
 
-	fprintf(r, "%s", name);
-
-	/* copy = strdup(args); */
-
-    fprintf(r, "(");
+    fprintf(r, "%s(", name);
     for (i = 0; i < func->nbArguments; ++i) {
         if (func->arguments[i]->type == TYPE_INT || func->arguments[i]->type == TYPE_BOOLEAN) {
             strcpy(type, "int");
@@ -46,71 +47,52 @@ void start_function(FILE *r, char *name, function_t *func, variable_type return_
     }
     fprintf(r, ") {\n");
 
-	/* fprintf(r, "(");
-	if (copy != NULL) {
-		while ((parameterPair = strsep(&copy, ","))) {
-			while ((parameter = strsep(&parameterPair, " "))) {
-				if (strcmp("entier", parameter) == 0 || strcmp("booleen", parameter) == 0 || strcmp("booléen", parameter) == 0) {
-					fprintf(r, "int ");
-				}
-
-				if (parameterPair == NULL) {
-					fprintf(r, "%s", parameter);
-				}
-			}
-
-			if (copy != NULL) {
-				fprintf(r, ", ");
-			}
-		}
-	}
-
-	fprintf(r, ") {\n"); */
-
-	free(name);
-	/* free(args); */  
+	free(name); 
 }
 
-void start_if(FILE *r, char *cmp1, char *operator, char *cmp2) {
+void start_if(FILE *r, int level, char *cmp1, char *operator, char *cmp2) {
+    print_tabs(r, level);
     fprintf(r, "if (%s %s %s) {\n", cmp1, operator, cmp2);
 }
 
-void start_else(FILE *r) {
+void start_else(FILE *r, int level) {
+    print_tabs(r, level);
     fprintf(r, "else {\n");
 }
 
-void start_for(FILE *r, char *var, int from, int to) {
+void start_for(FILE *r, int level, char *var, int from, int to) {
+    print_tabs(r, level);
     fprintf(r, "for (%s = %d; %s <= %d; ++%s) {\n", var, from, var, to, var);
 }
 
-void start_for_step(FILE *r, char *var, int from, int to, int step) {
-    /* Déclaration de la variable ? */
+void start_for_step(FILE *r, int level, char *var, int from, int to, int step) {
+    print_tabs(r, level);
     fprintf(r, "for (%s = %d; %s <= %d; %s += %d) {\n", var, from, var, to, var, step);
 }
 
-void start_while(FILE *r, char *cmp1, char *operator, char *cmp2) {
+void start_while(FILE *r, int level, char *cmp1, char *operator, char *cmp2) {
+    print_tabs(r, level);
     fprintf(r, "while (%s %s %s) {\n", cmp1, operator, cmp2);
 }
 
-void start_while_true(FILE *r) {
+void start_while_true(FILE *r, int level) {
+    print_tabs(r, level);
     fprintf(r, "while (1) {\n");
 }
 
 void start_main(FILE *r, char *name) {
-    fprintf(r, "/******************\nAlgorithme %s\n******************/\n\nint main() {\n", name);
+    fprintf(r, "\n/******************\nAlgorithme %s\n******************/\n\nint main() {\n", name);
 }
 
-void instruction(FILE *r) {
-
-}
-
-void declaration(FILE *r, char *name, char *value) {
+void declaration(FILE *r, int level, char *name, char *value) {
+    print_tabs(r, level);
     fprintf(r, "%s = %s;\n", name, value);
 }
 
-void function_call(FILE *r, char *name, function_t *func) {
+void function_call(FILE *r, int level, char *name, function_t *func) {
     int i;
 
+    print_tabs(r, level);
     fprintf(r, "%s(", name);
 
     for (i = 0; i < func->nbArguments; ++i) {
@@ -125,12 +107,38 @@ void function_call(FILE *r, char *name, function_t *func) {
     fprintf(r, ");\n");
 }
 
-void return_function(FILE *r) {
+void function_scanf(FILE *r, int level, char *name) {
+    print_tabs(r, level);
+    fprintf(r, "scanf(\"%%d\", &%s);\n", name);
+}
+
+void return_function(FILE *r, int level) {
+    print_tabs(r, level);
     fprintf(r, "return;\n");
 }
 
-void return_function_value(FILE *r, char *value) {
+void return_function_value(FILE *r, int level, char *value) {
+    print_tabs(r, level);
     fprintf(r, "return %s;\n", value);
+}
+
+void generate_declaration(FILE *r, int level, char *name, variable_type type) {
+    print_tabs(r, level);
+    switch (type) {
+        case TYPE_BOOLEAN:
+            fprintf(r, "/* Booléen */\n");
+            print_tabs(r, level);
+
+        case TYPE_INT:
+            fprintf(r, "int ");
+            break;
+
+        default:
+            fprintf(stderr, "Erreur: type inconnu\n");
+            exit(EXIT_FAILURE);
+    }
+
+    fprintf(r, "%s;\n", name);
 }
 
 void end_void_function(FILE *r) {
@@ -141,22 +149,36 @@ void end_function(FILE *r) {
     fprintf(r, "}\n");
 }
 
-void end_if(FILE *r) {
+void end_if(FILE *r, int level) {
+    print_tabs(r, level);
     fprintf(r, "}\n");
 }
 
-void end_else(FILE *r) {
+void end_else(FILE *r, int level) {
+    print_tabs(r, level);
     fprintf(r, "}\n");
 }
 
-void end_for(FILE *r) {
+void end_for(FILE *r, int level) {
+    print_tabs(r, level);
     fprintf(r, "}\n");
 }
 
-void end_while(FILE *r) {
+void end_while(FILE *r, int level) {
+    print_tabs(r, level);
     fprintf(r, "}\n");
 }
 
-void end_main(FILE *r) {
-    fprintf(r, "}\n");
+void end_main(FILE *r, int level) {
+    print_tabs(r, level);
+    fprintf(r, "return 1;\n");
+    fprintf(r, "}");
+}
+
+void print_tabs(FILE *r, int nb) {
+    int i;
+
+    for (i = 0; i < nb; ++i) {
+        fprintf(r, "\t");
+    }
 }
