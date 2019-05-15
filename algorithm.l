@@ -1,7 +1,11 @@
 %{
+#include "libs/cell.h"
 #include "y.tab.h"
 #include <string.h>
+#include <ctype.h>
+
 void yyerror(const char *erreurMsg);
+void toLowerString(char *);
 %}
 
 %%
@@ -27,47 +31,69 @@ void yyerror(const char *erreurMsg);
 (?i:fin) { return END; }
 
 (?i:entier|booléen|booleen) {
-	strncpy(yylval.type, yytext, 63);
-	yylval.type[63] = '\0';
+	char *lower = strdup(yytext);
+	toLowerString(lower);
+
+	if (strcmp(lower, "entier") == 0) {
+		yylval.vtype = TYPE_INT;
+	}
+
+	else {
+		yylval.vtype = TYPE_BOOLEAN;
+	}
+
 	return VARIABLE_TYPE;
 }
  /* (?i:bool[é|e]en) { return TYPE_BOOLEAN; } */
 
-"=="|"!=" { return COMPARISON_OPERATOR; }
-"!" { return NOT; }
+"=="|"!=" {
+	yylval.string = strdup(yytext);
+	return COMPARISON_OPERATOR;
+}
+
  /* "+"|"-"|"/"|"*"|"%" { return OPERATION_OPERATOR; } */
  /* "(" { return OPENING_PARENTHESIS; }
 	")" { return CLOSING_PARENTHESIS; } */
  /* "=" { return ASSIGNMENT_OPERATOR; } */
-"+" { return OPERATOR_PLUS; }
-"-" { return OPERATOR_MINUS; }
-"*" { return OPERATOR_MULTIPLY; }
-"/" { return OPERATOR_DIVIDE; }
-"%" { return OPERATOR_MODULO; }
+ /* "+" { return OPERATOR_PLUS; }
+	"-" { return OPERATOR_MINUS; }
+	"*" { return OPERATOR_MULTIPLY; }
+	"/" { return OPERATOR_DIVIDE; }
+	"%" { return OPERATOR_MODULO; } */
 
 [0-9]+ {
-	yylval.integer = atoi(yytext);
+	yylval.string = strdup(yytext);
 	return INT;
 }
 
 (?i:vrai|faux) {
-	yylval.integer = (strcmp(yytext, "vrai") == 0) ? 1 : 0;
+	char *lower = strdup(yytext);
+	toLowerString(lower);
+
+	yylval.string = (char*) malloc(sizeof(char) * 2);
+
+	if (strcmp(lower, "vrai") == 0) {
+		snprintf(yylval.string, 2, "%s", "1");
+	}
+
+	else {
+		snprintf(yylval.string, 2, "%s", "0");
+	}
+
 	return BOOLEAN;
 }
 
 [a-zA-Z_$][a-zA-Z0-9_$]* {
 	yylval.variable = strdup(yytext);
-	/* strcpy(yylval.variable, yytext); */
 	return VARIABLE;
 }
 
 \"(?:\\.|[^\n"\\])*\" {
 	yylval.string = strdup(yytext);
-	/* strcpy(yylval.output, yytext); */
 	return STRING;
 }
 
-[\:,=\n\(\)] {
+[\:,=\n\(\)\*\+\-\/\%] {
 	return *yytext;
 }
 
@@ -80,4 +106,10 @@ void yyerror(const char *erreurMsg);
 void yyerror(const char *erreurMsg) {
 	fprintf(stderr, "\n Erreur '%s' sur '%s'.\n", erreurMsg, yytext);
 	exit(EXIT_FAILURE);
+}
+
+void toLowerString(char *str) {
+	for(int i = 0; str[i]; i++){
+		str[i] = tolower(str[i]);
+	}
 }
