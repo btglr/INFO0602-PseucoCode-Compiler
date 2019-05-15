@@ -11,6 +11,8 @@ void generate_function(char*, char*, char*);
 void end_function();
 void start_main();
 void end_main();
+void *malloc_check(size_t length);
+void *realloc_check(void *var, size_t length);
 int yylex();
 
 hash_table_t table;
@@ -34,8 +36,11 @@ hash_table_t table;
 %type<integer> plus_minus
 %type<integer> multiply_divide
 %type<integer> number
-%type<string> parameters
-%type<string> argument
+%type<string> function_definition_arguments
+%type<string> write
+%type<string> full_string
+%type<string> var_or_string
+%type<string> function_call_arguments
 
 %%
 
@@ -54,69 +59,31 @@ algorithm:
 	;
 
 function:
-	BEGIN_FUNCTION VARIABLE parameters ':' VARIABLE_TYPE '\n' {
+	BEGIN_FUNCTION VARIABLE '(' function_definition_arguments ')' ':' VARIABLE_TYPE '\n' {
 		/* Fonction Nom(type nomParam[, type nomParam]) : typeRetour */
-		generate_function($2, $3, $5);
+		generate_function($2, $4, $7);
 	} expression END {
 		end_function();
 	} '\n' function
-	| BEGIN_PROCEDURE VARIABLE parameters '\n' {
+	| BEGIN_PROCEDURE VARIABLE '(' function_definition_arguments ')' '\n' {
 		/* Procédure Nom(type nomParam[, type nomParam]) */
-		generate_function($2, $3, "void");
+		generate_function($2, $4, "void");
 	} expression END {
 		end_function();
 	} '\n' function
 	| ;
 
-parameters:
-	'(' argument ')' {
-		/* Correspond à un argument de fonction/procédure */
-
-		if (($$ = strdup($2)) == NULL) {
-			fprintf(stderr, "Erreur, mémoire insuffisante\n");
-			exit(EXIT_FAILURE);
-		}
-
-		free($2);
-	}
-	| '(' STRING ')' {
-		/* Correspond à un appel de fonction (Ex: Ecrire("test")) */
-
-		if (($$ = strdup($2)) == NULL) {
-			fprintf(stderr, "Erreur, mémoire insuffisante\n");
-			exit(EXIT_FAILURE);
-		}
-
-		printf("String: %s\n", $$);
-		free($2);
-	}
-	| '(' VARIABLE ')' {
-		/*
-		Correspond à un appel de fonction (Ex: Lire(a) ou Ecrire(a))
-		Faire en sorte que ce soit possible d'appeler une fonction avec plusieurs arguments : pgcd(x, y)
-
-		arguments: règle qui prend [soit un type et une variable, soit une variable], n fois
-
-		*/
-
-		if (($$ = strdup($2)) == NULL) {
-			fprintf(stderr, "Erreur, mémoire insuffisante\n");
-			exit(EXIT_FAILURE);
-		}
-
-		printf("Variable: %s\n", $$);
-		free($2);
-	}
+function_call:
+	read
+	| write
+	| VARIABLE '(' function_call_arguments ')'
 	;
 
-argument:
-	VARIABLE_TYPE VARIABLE ',' argument {
+function_definition_arguments:
+	VARIABLE_TYPE VARIABLE ',' function_definition_arguments {
 		size_t length = strlen($1) + strlen($2) + strlen($4) + 4;
 
-		if (($$ = (char*) malloc(sizeof(char) * length)) == NULL) {
-			fprintf(stderr, "Erreur, mémoire insuffisante\n");
-			exit(EXIT_FAILURE);
-		}
+		$$ = (char*) malloc_check(sizeof(char) * length);
 
 		snprintf($$, length, "%s %s, %s", $1, $2, $4);
 		printf("\t{Parameter: %s} : {Type: %s}\n", $2, $1);
@@ -126,11 +93,8 @@ argument:
 	}
 	| VARIABLE_TYPE VARIABLE {
 		size_t length = strlen($1) + strlen($2) + 2;
-		
-		if (($$ = (char*) malloc(sizeof(char) * length)) == NULL) {
-			fprintf(stderr, "Erreur, mémoire insuffisante\n");
-			exit(EXIT_FAILURE);
-		}
+
+		$$ = (char*) malloc_check(sizeof(char) * length);
 
 		snprintf($$, length, "%s %s", $1, $2);
 		printf("\t{Parameter: %s} : {Type: %s}\n", $2, $1);
@@ -138,10 +102,99 @@ argument:
 		free($2);
 	}
 	| {
-		$$ = (char*) malloc(sizeof(char));
+		$$ = (char*) malloc_check(sizeof(char));
 		strcpy($$, "");
 	}
 	;
+
+function_call_arguments:
+	VARIABLE ',' function_call_arguments {
+		size_t length = strlen($1) + strlen($3) + 3;
+
+		$$ = (char*) malloc_check(sizeof(char) * length);
+		
+		snprintf($$, length, "%s, %s", $1, $3);
+
+		free($1);
+		free($3);
+	}
+	| VARIABLE {
+		$$ = strdup($1);
+		free($1);
+	}
+	| {
+		$$ = strdup("");
+	};
+
+read:
+	READ_INPUT '(' VARIABLE ')' {
+		/* Si la variable n'est pas encore existante elle est ajoutée à la table de hachage et déclarée en C */
+		if (findHashTable(&table, $3) == NULL) {
+			cell_t *cell = (cell_t*) malloc(sizeof(cell_t));
+			initializeCell(cell, $3, 0);
+			insertHashTable(&table, cell);
+
+			fprintf(r, "int %s;\n", $3);
+		}
+
+		/* Puis ensuite on effectue le scanf */
+		fprintf(r, "scanf(\"%%d\", &%s);\n", $3);
+	}
+	;
+
+write:
+	WRITE_OUTPUT '(' full_string ')' {
+		fprintf(r, "printf(%s);\n", $3);
+		printf("%s\n", $3);
+	}
+	;
+
+full_string:
+	full_string OPERATOR_PLUS var_or_string {
+		/* printf("%s %s\n", $1, $$); */
+
+		size_t length = strlen($1) + strlen($3) + 1;
+		$$ = malloc_check(sizeof(char) * length);
+
+		snprintf($$, length, "%s%s", $1, $3);
+	}
+	| var_or_string
+	;
+
+var_or_string:
+	VARIABLE {
+		size_t length = strlen("%d") + 1;
+
+		$$ = malloc_check(sizeof(char) * length);
+
+		snprintf($$, length, "%s", "%d");
+
+		/* Ajouter la variable à une pile */
+	}
+	| STRING {
+		char *var;
+		var = strdup($1);
+
+		size_t length = strlen(var);
+
+		if (length > 2) {
+			var++;
+			var[length - 2] = '\0';
+			length = strlen(var) + 1;
+
+			$$ = (char*) malloc_check(sizeof(char) * length);
+			snprintf($$, length, "%s", var);
+		}
+
+		else {
+			var = realloc_check(var, sizeof(char) * 2);
+
+			var[0] = ' ';
+			var[1] = '\0';
+		}
+
+		/* printf("%s", var); */
+	}
 
 expression:
 	declaration '\n' expression
@@ -187,23 +240,8 @@ declaration:
 	;
 
 instruction:
-	WRITE_OUTPUT parameters {
-		fprintf(r, "printf(%s);\n", $2);
-	}
-	| READ_INPUT '(' VARIABLE ')' {
-		/* Si la variable n'est pas encore existante elle est ajoutée à la table de hachage et déclarée en C */
-		if (findHashTable(&table, $3) == NULL) {
-			cell_t *cell = (cell_t*) malloc(sizeof(cell_t));
-			initializeCell(cell, $3, 0);
-			insertHashTable(&table, cell);
-
-			fprintf(r, "int %s;\n", $3);
-		}
-
-		/* Puis ensuite on effectue le scanf */
-		fprintf(r, "scanf(\"%%d\", &%s);\n", $3);
-	}
-	| condition
+	condition
+	| function_call
 	| loop
 	| RETURN value
 	| RETURN
@@ -241,10 +279,10 @@ while_loop:
 
 for_loop:
 	FOR VARIABLE FROM INT TO INT DO {
-
+		/* Ajouter variable table de symboles */
 	} '\n' expression END FOR
 	| FOR VARIABLE FROM INT TO INT STEP INT DO {
-
+		/* Ajouter variable table de symboles */
 	} '\n' expression END FOR
 	;
 
@@ -382,4 +420,24 @@ void end_main() {
 
 void end_function() {
 	fprintf(r, "}\n");
+}
+
+void *malloc_check(size_t length) {
+    void *var;
+
+    if ((var = malloc(length)) == NULL) {
+        fprintf(stderr, "Erreur: mémoire insuffisante\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return var;
+}
+
+void *realloc_check(void *var, size_t length) {
+	if ((var = realloc(var, length)) == NULL) {
+		fprintf(stderr, "Erreur: mémoire insuffisante\n");
+        exit(EXIT_FAILURE);
+	}
+
+	return var;
 }
