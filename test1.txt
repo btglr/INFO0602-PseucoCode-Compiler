@@ -1,4 +1,5 @@
 algorithme test
-    ecrire(i + " oui " + b)
-    ecrire("oui " + "lol" + b + c)
+    lire(j)
+    si j % 2 == 0 alors
+    fin si
 fin
