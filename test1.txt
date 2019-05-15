@@ -1,0 +1,4 @@
+algorithme test
+    ecrire(i + " oui " + b)
+    ecrire("oui " + "lol" + b + c)
+fin
