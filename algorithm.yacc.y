@@ -2,138 +2,205 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include "libs/hashTable.h"
+#include "libs/memoryUtils.h"
+#include "libs/queue.h"
+#include "libs/hashList.h"
+#include "libs/codeGenerator.h"
+
+#define YYDEBUG 0
 
 FILE *r;
 
 void yyerror(const char *erreurMsg);
-void generate_function(char*, char*, char*);
-void end_function();
-void start_main();
-void end_main();
-void *malloc_check(size_t length);
-void *realloc_check(void *var, size_t length);
+int isVariableCreated(hashTable_t *table, char *variable);
+int isFunctionCreated(hashList_t *liste, char *function);
 int yylex();
 
-hash_table_t table;
+hashList_t *hashList;
+hashTable_t *mainTable;
+hashTable_t *currentTable;
+queue_t *queue;
+function_t *func;
 
 %}
 
 %union {
 	int integer;
-	char type[64];
 	char *variable;
 	char *string;
+	variable_type vtype;
 }
 
 %token BEGIN_ALGORITHM END BEGIN_FUNCTION BEGIN_PROCEDURE
 %token<string> FOR WHILE IF ELSE WRITE_OUTPUT READ_INPUT DO THEN RETURN FROM TO STEP
-%token<type> VARIABLE_TYPE
-%token<string> COMPARISON_OPERATOR OPERATOR_DIVIDE OPERATOR_MINUS OPERATOR_MODULO OPERATOR_MULTIPLY OPERATOR_PLUS NOT
-%token<integer> BOOLEAN INT
+%token<vtype> VARIABLE_TYPE
+%token<string> COMPARISON_OPERATOR
+%token<string> BOOLEAN INT
 %token<variable> VARIABLE
 %token<string> STRING
-%type<integer> plus_minus
-%type<integer> multiply_divide
-%type<integer> number
-%type<string> function_definition_arguments
+%type<string> plus_minus
+%type<string> multiply_divide
+%type<string> number
 %type<string> write
 %type<string> full_string
 %type<string> var_or_string
-%type<string> function_call_arguments
+%type<string> value
+%type<string> boolean_expression
 
 %%
 
 program:
 	function algorithm END {
-		end_main();
+		end_main(r);
 		return EXIT_SUCCESS;
 	}
 	| ;
 
 algorithm:
 	BEGIN_ALGORITHM VARIABLE '\n' {
+		mainTable = (hashTable_t*) malloc(sizeof(hashTable_t));
+
+		/* Insertion de la table main */
+		initializeHashTable(mainTable, $2, 256);
+		insertHashList(hashList, mainTable);
+
     	printf("\tStarted algorithm %s\n", $2);
-		start_main();
+		start_main(r, mainTable->name);
+
+		currentTable = mainTable;
+
+		free($2);
 	} expression
 	;
 
 function:
-	BEGIN_FUNCTION VARIABLE '(' function_definition_arguments ')' ':' VARIABLE_TYPE '\n' {
+	BEGIN_FUNCTION VARIABLE {
+		if (isFunctionCreated(hashList, $2)) {
+			yyerror("Fonction deja existante");
+		}
+
+		hashTable_t *funcTable = (hashTable_t*) malloc(sizeof(hashTable_t));
+
+		/* Insertion de la table main */
+		initializeHashTable(funcTable, $2, 256);
+		insertHashList(hashList, funcTable);
+
+		currentTable = funcTable;
+
+		func = (function_t*) malloc(sizeof(function_t));
+		func->nbArguments = 0;
+	} '(' function_definition_arguments ')' ':' VARIABLE_TYPE '\n' {
 		/* Fonction Nom(type nomParam[, type nomParam]) : typeRetour */
-		generate_function($2, $4, $7);
+		start_function(r, $2, func, $8);
 	} expression END {
-		end_function();
+		end_function(r);
+		free($2);
+		free(func);
 	} '\n' function
-	| BEGIN_PROCEDURE VARIABLE '(' function_definition_arguments ')' '\n' {
+	| BEGIN_PROCEDURE VARIABLE {
+		if (isFunctionCreated(hashList, $2)) {
+			yyerror("Fonction deja existante");
+		}
+
+		hashTable_t *funcTable = (hashTable_t*) malloc(sizeof(hashTable_t));
+
+		/* Insertion de la table main */
+		initializeHashTable(funcTable, $2, 256);
+		insertHashList(hashList, funcTable);
+
+		currentTable = funcTable;
+
+		func = (function_t*) malloc(sizeof(function_t));
+		func->nbArguments = 0;
+		func->arguments = (argument_t**) malloc(sizeof(argument_t*));
+	} '(' function_definition_arguments ')' '\n' {
 		/* Procédure Nom(type nomParam[, type nomParam]) */
-		generate_function($2, $4, "void");
+		start_void_function(r, $2, func);
 	} expression END {
-		end_function();
+		end_function(r);
+		free($2);
+		free(func);
 	} '\n' function
+	| '\n' function
 	| ;
 
 function_call:
 	read
 	| write
-	| VARIABLE '(' function_call_arguments ')'
+	| VARIABLE {
+		func = (function_t*) malloc(sizeof(function_t));
+		func->nbArguments = 0;
+	} '(' function_call_arguments ')' {
+		if (!isFunctionCreated(hashList, $1)) {
+			yyerror("Fonction inconnue");
+		}
+
+		function_call(r, $1, func);
+
+		free($1);
+		free(func);
+	}
 	;
 
 function_definition_arguments:
-	VARIABLE_TYPE VARIABLE ',' function_definition_arguments {
-		size_t length = strlen($1) + strlen($2) + strlen($4) + 4;
-
-		$$ = (char*) malloc_check(sizeof(char) * length);
-
-		snprintf($$, length, "%s %s, %s", $1, $2, $4);
-		printf("\t{Parameter: %s} : {Type: %s}\n", $2, $1);
-
-		free($2);
-		free($4);
-	}
-	| VARIABLE_TYPE VARIABLE {
-		size_t length = strlen($1) + strlen($2) + 2;
-
-		$$ = (char*) malloc_check(sizeof(char) * length);
-
-		snprintf($$, length, "%s %s", $1, $2);
-		printf("\t{Parameter: %s} : {Type: %s}\n", $2, $1);
-
-		free($2);
-	}
-	| {
-		$$ = (char*) malloc_check(sizeof(char));
-		strcpy($$, "");
-	}
+	function_definition_arguments ',' arguments
+	| arguments
 	;
 
-function_call_arguments:
-	VARIABLE ',' function_call_arguments {
-		size_t length = strlen($1) + strlen($3) + 3;
+arguments:
+	VARIABLE_TYPE VARIABLE {
+		if (isVariableCreated(currentTable, $2)) {
+			yyerror("Variable déjà existante dans la définition de fonction");
+		}
 
-		$$ = (char*) malloc_check(sizeof(char) * length);
+		cell_t *cell = (cell_t*) malloc(sizeof(cell_t));
+		initializeCell(cell, $2, $1);
+		insertHashTable(currentTable, cell);
 		
-		snprintf($$, length, "%s, %s", $1, $3);
+		func->nbArguments += 1;
+		func->arguments = realloc(func->arguments, sizeof(argument_t*) * func->nbArguments);
+
+		argument_t *arg = (argument_t*) malloc(sizeof(argument_t));
+		arg->type = $1;
+		arg->name = strdup($2);
+
+		func->arguments[func->nbArguments - 1] = arg;
+
+		free($2);
+	}
+	| ;
+
+function_call_arguments:
+	function_call_arguments ',' arguments_without_types
+	| arguments_without_types
+	;
+
+arguments_without_types:
+	plus_minus {
+		func->nbArguments += 1;
+		func->arguments = realloc(func->arguments, sizeof(argument_t*) * func->nbArguments);
+
+		argument_t *arg = (argument_t*) malloc(sizeof(argument_t));
+		arg->type = TYPE_VOID;
+		arg->name = strdup($1);
+
+		func->arguments[func->nbArguments - 1] = arg;
 
 		free($1);
-		free($3);
 	}
-	| VARIABLE {
-		$$ = strdup($1);
-		free($1);
-	}
-	| {
-		$$ = strdup("");
-	};
+	| ;
 
 read:
 	READ_INPUT '(' VARIABLE ')' {
 		/* Si la variable n'est pas encore existante elle est ajoutée à la table de hachage et déclarée en C */
-		if (findHashTable(&table, $3) == NULL) {
+		if (!isVariableCreated(currentTable, $3)) {
 			cell_t *cell = (cell_t*) malloc(sizeof(cell_t));
-			initializeCell(cell, $3, 0);
-			insertHashTable(&table, cell);
+			initializeCell(cell, $3, TYPE_INT);
+			insertHashTable(currentTable, cell);
 
+			/* Trouver la ligne de déclaration et ajouter toutes les variables de la table des symboles juste après ? */
 			fprintf(r, "int %s;\n", $3);
 		}
 
@@ -144,13 +211,32 @@ read:
 
 write:
 	WRITE_OUTPUT '(' full_string ')' {
-		fprintf(r, "printf(%s);\n", $3);
-		printf("%s\n", $3);
+		if (!isEmpty(queue)) {
+			fprintf(r, "printf(\"%s\", ", $3);
+		}
+
+		else {
+			fprintf(r, "printf(\"%s\"", $3);
+		}
+
+		while (!isEmpty(queue)) {
+			variable_t *v = dequeue(queue);
+
+			/* Si vide on ne met pas de virgule */
+			if (isEmpty(queue)) {
+				fprintf(r, "%s", v->name);
+			}
+			else {
+				fprintf(r, "%s, ", v->name);
+			}
+		}
+
+		fprintf(r, ");\n");
 	}
 	;
 
 full_string:
-	full_string OPERATOR_PLUS var_or_string {
+	full_string '+' var_or_string {
 		/* printf("%s %s\n", $1, $$); */
 
 		size_t length = strlen($1) + strlen($3) + 1;
@@ -163,6 +249,54 @@ full_string:
 
 var_or_string:
 	VARIABLE {
+		func = (function_t*) malloc(sizeof(function_t));
+		func->nbArguments = 0;
+	} '(' function_call_arguments ')' {
+		int i;
+
+		if (!isFunctionCreated(hashList, $1)) {
+			yyerror("Fonction inconnue");
+		}
+
+		/* Ajouter la fonction à la pile */
+		variable_t *v = (variable_t*) malloc(sizeof(variable_t));
+		
+		size_t argLength = 0;
+
+		for (i = 0; i < func->nbArguments; ++i) {
+			/* + 2 pour la virgule et l'espace */
+			argLength += strlen(func->arguments[i]->name) + 2;
+		}
+		/* -2 pour supprimer la dernière virgule et le dernier espace, +1 pour le \0 */
+		argLength -= 1;
+
+		char *argBuffer = (char*) malloc(sizeof(char) * argLength);
+
+		for (i = 0; i < func->nbArguments; ++i) {
+			if (i < func->nbArguments - 1) {
+				snprintf(argBuffer + strlen(argBuffer), argLength, "%s, ", func->arguments[i]->name);
+			}
+			else {
+				snprintf(argBuffer + strlen(argBuffer), argLength, "%s", func->arguments[i]->name);
+			}
+		}
+
+		size_t length = argLength + strlen($1) + 3;
+		v->name = malloc(sizeof(char) * length);
+		snprintf(v->name, length, "%s(%s)", $1, argBuffer);
+		v->type = TYPE_INT;
+
+		enqueue(queue, v);
+	} {
+		printf("Appel de fonction dans ecrire\n");
+	}
+	| VARIABLE {
+		cell_t *cell;
+
+		if ((cell = findHashTable(currentTable, $1)) == NULL) {
+			yyerror("Variable inexistante");
+		}
+
 		size_t length = strlen("%d") + 1;
 
 		$$ = malloc_check(sizeof(char) * length);
@@ -170,6 +304,11 @@ var_or_string:
 		snprintf($$, length, "%s", "%d");
 
 		/* Ajouter la variable à une pile */
+		variable_t *v = (variable_t*) malloc(sizeof(variable_t));
+		v->name = strdup($1);
+		v->type = TYPE_INT;
+
+		enqueue(queue, v);
 	}
 	| STRING {
 		char *var;
@@ -195,43 +334,46 @@ var_or_string:
 
 		/* printf("%s", var); */
 	}
+	;
 
 expression:
 	declaration '\n' expression
 	| instruction '\n' expression
+	| '\n' expression
 	| ;
 
 declaration:
 	VARIABLE '=' plus_minus {
-		printf("Assigned int variable \"%s\" with value %d\n", $1, $3);
-
 		cell_t *cell;
 
-		if ((cell = findHashTable(&table, $1)) == NULL) {
+		if ((cell = findHashTable(currentTable, $1)) == NULL) {
 			cell = (cell_t*) malloc(sizeof(cell_t));
-			initializeCell(cell, $1, $3);
-			insertHashTable(&table, cell);
+			initializeCell(cell, $1, TYPE_INT);
+			insertHashTable(currentTable, cell);
 		}
 
-		else {
-			cell->value = $3;
-		}
+		/* Déclaration de toutes les variables de la table des symboles au début de chaque fonction */
+		fprintf(r, "int %s;\n", $1);
+
+		declaration(r, $1, $3);
 	}
 	| VARIABLE '=' BOOLEAN {
-		printf("Assigned boolean variable \"%s\" with value %d\n", $1, $3);
-
 		cell_t *cell;
 
-		if ((cell = findHashTable(&table, $1)) == NULL) {
+		if ((cell = findHashTable(currentTable, $1)) == NULL) {
 			cell = (cell_t*) malloc(sizeof(cell_t));
-			initializeCell(cell, $1, $3);
-			insertHashTable(&table, cell);
+			initializeCell(cell, $1, TYPE_BOOLEAN);
+			insertHashTable(currentTable, cell);
 		}
 
-		else {
+		fprintf(r, "int %s;\n/* Booléen */\n", $1);
+		declaration(r, $1, $3);
+
+		/* else {
 			cell->value = $3;
-		}
+		} */
 
+		/* Pas besoin des valeurs, juste de savoir si la variable est déclarée */
 		/*
 		Ajouter $$ = $3 pour l'assignation et comparaison ?
 		Ex: (a = 2) == 0
@@ -243,23 +385,42 @@ instruction:
 	condition
 	| function_call
 	| loop
-	| RETURN value
-	| RETURN
+	| RETURN value {
+		return_function_value(r, $2);
+
+		free($2);
+	}
+	| RETURN {
+		return_function(r);
+	}
 	;
 
 condition:
-	IF VARIABLE COMPARISON_OPERATOR value THEN {
+	IF plus_minus COMPARISON_OPERATOR value THEN {
+		printf("Test1: %s\n", $2);
+		printf("Test1: %s\n", $3);
 
-	} '\n' expression ELSE {
+		start_if(r, $2, $3, $4);
 
-	} '\n' expression END IF
+		free($2);
+		free($4);
+	} '\n' expression else_cond END IF {
+		end_if(r);
+	}
 	| IF boolean_expression THEN {
 		/* Equivalent à if(true), je sais pas si c'est nécessaire d'ajouter ça */
 
-	} '\n' expression ELSE {
-
-	} '\n' expression END IF
+	} '\n' expression else_cond END IF {
+		
+	}
 	;
+
+else_cond:
+	ELSE {
+		end_if(r);
+		start_else(r);
+	} '\n' expression
+	| ;
 
 loop:
 	while_loop
@@ -268,176 +429,219 @@ loop:
 
 while_loop:
 	WHILE plus_minus COMPARISON_OPERATOR plus_minus DO {
-		printf("\tDébut tant que avec opération\n");
-	} '\n' expression END WHILE
-	| WHILE boolean_expression DO {
+		start_while(r, $2, $3, $4);
 
+		free($2);
+		free($4);
 	} '\n' expression END WHILE {
-
+		end_while(r);
+	}
+	| WHILE boolean_expression DO {
+		start_while_true(r);
+		free($2);
+	} '\n' expression END WHILE {
+		end_while(r);
 	}
 	;
 
 for_loop:
 	FOR VARIABLE FROM INT TO INT DO {
-		/* Ajouter variable table de symboles */
-	} '\n' expression END FOR
+		if (!isVariableCreated(currentTable, $1)) {
+			cell_t *cell = (cell_t*) malloc(sizeof(cell_t));
+			initializeCell(cell, $2, TYPE_INT);
+			insertHashTable(currentTable, cell);
+		}
+
+		start_for(r, $2, atoi($4), atoi($6));
+
+		free($2);
+		free($4);
+		free($6);
+	} '\n' expression END FOR {
+		end_for(r);
+	}
 	| FOR VARIABLE FROM INT TO INT STEP INT DO {
-		/* Ajouter variable table de symboles */
-	} '\n' expression END FOR
+		if (!isVariableCreated(currentTable, $1)) {
+			cell_t *cell = (cell_t*) malloc(sizeof(cell_t));
+			initializeCell(cell, $2, TYPE_INT);
+			insertHashTable(currentTable, cell);
+		}
+
+		start_for_step(r, $2, atoi($4), atoi($6), atoi($8));
+
+		free($2);
+		free($4);
+		free($6);
+		free($8);
+	} '\n' expression END FOR {
+		end_for(r);
+	}
 	;
 
 value:
-	VARIABLE
-	| INT
-	| boolean_expression
+	plus_minus {
+		$$ = strdup($1);
+		free($1);
+	}
+	| boolean_expression {
+		$$ = strdup($1);
+		free($1);
+	}
 	;
 
 boolean_expression:
-	BOOLEAN
-	| NOT BOOLEAN
+	BOOLEAN {
+		$$ = strdup($1);
+		free($1);
+	}
+	| '!' BOOLEAN {
+		size_t length = strlen($2) + 2;
+		$$ = (char*) malloc_check(sizeof(char) * length);
+
+		snprintf($$, length, "!%s", $2);
+		free($2);
+	}
 	;
 
 plus_minus:
-	plus_minus OPERATOR_PLUS multiply_divide {
-		$$ = $1 + $3;
+	plus_minus '+' multiply_divide {
+		size_t length = strlen($1) + strlen($3) + 4;
+		$$ = malloc_check(sizeof(char) * length);
+		snprintf($$, length, "%s + %s", $1, $3);
+
+		free($1);
+		free($3);
 	}
-	| plus_minus OPERATOR_MINUS multiply_divide {
-		$$ = $1 - $3;
+	| plus_minus '-' multiply_divide {
+		size_t length = strlen($1) + strlen($3) + 4;
+		$$ = malloc_check(sizeof(char) * length);
+		snprintf($$, length, "%s - %s", $1, $3);
+
+		free($1);
+		free($3);
 	}
 	| multiply_divide
 	;
 
 multiply_divide:
-	multiply_divide OPERATOR_DIVIDE number {
-		if ($3 == 0) {
+	multiply_divide '/' number {
+		if (atoi($3) == 0) {
 			yyerror("Division par zero");
 		}
-		else {
-			$$ = $1 / $3;
-		}
+		
+		size_t length = strlen($1) + strlen($3) + 4;
+		$$ = malloc_check(sizeof(char) * length);
+		snprintf($$, length, "%s / %s", $1, $3);
+
+		free($1);
+		free($3);
 	}
-	| multiply_divide OPERATOR_MULTIPLY number {
-		$$ = $1 * $3;
+	| multiply_divide '*' number {
+		size_t length = strlen($1) + strlen($3) + 4;
+		$$ = malloc_check(sizeof(char) * length);
+		snprintf($$, length, "%s * %s", $1, $3);
+
+		free($1);
+		free($3);
 	}
-	| multiply_divide OPERATOR_MODULO number {
-		if ($3 == 0) {
+	| multiply_divide '%' number {
+		if (!(strlen($3) == 1 && isalpha($3[0])) && atoi($3) == 0) {
+			printf("Test: \"%s\"", $3);
 			yyerror("Division par zero via modulo");
 		}
-		else {
-			$$ = $1 % $3;
-		}
+
+		size_t length = strlen($1) + strlen($3) + 4;
+		$$ = malloc_check(sizeof(char) * length);
+		snprintf($$, length, "%s %% %s", $1, $3);
+
+		free($1);
+		free($3);
 	}
 	| number
 	;
 
 number:
 	'(' plus_minus ')' {
-		$$ = $2;
+		size_t length = strlen($2) + 3;
+		$$ = malloc_check(sizeof(char) * length);
+		snprintf($$, length, "(%s)", $2);
+
+		free($2);
 	}
-	| OPERATOR_MINUS INT {
-		$$ = -$2;
+	| '-' INT {
+		size_t length = strlen($2) + 2;
+		$$ = malloc_check(sizeof(char) * length);
+		snprintf($$, length, "-%s", $2);
+
+		free($2);
 	}
 	| INT {
-		$$ = $1;
+		size_t length = strlen($1) + 1;
+		$$ = malloc_check(sizeof(char) * length);
+		snprintf($$, length, "%s", $1);
+
+		free($1);
 	}
 	| VARIABLE {
-		cell_t *cell;
-
-		if ((cell = findHashTable(&table, $1)) == NULL) {
-			yyerror("Variable inexistante");
+		if (!isVariableCreated(currentTable, $1)) {
+			yyerror("Variable inexistante dans opération");
 		}
 
-		else {
-			$$ = cell->value;
+		cell_t *cell = findHashTable(currentTable, $1);
+
+		if (cell->type == TYPE_BOOLEAN) {
+			yyerror("Impossible d'effectuer des opérations avec un booleen");
 		}
+
+		size_t length = strlen($1) + 1;
+		$$ = malloc_check(sizeof(char) * length);
+		snprintf($$, length, "%s", $1);
+
+		free($1);
+
+		printf("$$ = %s\n", $$);
 	}
 	;
 
 %%
 
 int main(void) {
-	initializeHashTable(&table, 256);
+	hashList = (hashList_t*) malloc(sizeof(hashList_t));
+	initializeHashList(hashList);
 
 	r = fopen("result.c", "w");
+
+	/* Correspond au nombre maximum de variables pouvant être ajoutées à un "Ecrire" */
+	queue = createQueue(255);
+
+	#if YYDEBUG
+		yydebug = 1;
+	#endif 
+
 	yyparse();
 
 	fclose(r);
-	destroyHashTable(&table);
+	destroyHashList(hashList);;
+	destroyQueue(queue);
 
   	return EXIT_SUCCESS;
 }
 
-void generate_function(char *name, char *args, char *return_type) {
-	char *copy;
-	char *parameterCouple;
-	char *parameter;
+int getIntegerLength(int value) {
+	int length = !value;
 
-	if (strcmp("entier", return_type) == 0 || strcmp("booleen", return_type) == 0 || strcmp("booléen", return_type) == 0) {
-		fprintf(r, "int ");
+	while(value) {
+		length++;
+		value /= 10;
 	}
 
-	else {
-		fprintf(r, "void ");
-	}
-
-	fprintf(r, "%s", name);
-
-	copy = strdup(args);
-
-	fprintf(r, "(");
-	if (copy != NULL) {
-		while ((parameterCouple = strsep(&copy, ","))) {
-			while ((parameter = strsep(&parameterCouple, " "))) {
-				if (strcmp("entier", parameter) == 0 || strcmp("booleen", parameter) == 0 || strcmp("booléen", parameter) == 0) {
-					fprintf(r, "int ");
-				}
-
-				if (parameterCouple == NULL) {
-					fprintf(r, "%s", parameter);
-				}
-			}
-
-			if (copy != NULL) {
-				fprintf(r, ", ");
-			}
-		}
-	}
-
-	fprintf(r, ") {\n");
-
-	free(name);
-	free(args);
-	free(copy);
+	return length;
 }
 
-void start_main() {
-	fprintf(r, "int main() {\n");
+int isVariableCreated(hashTable_t *table, char *variable) {
+	return !(findHashTable(table, variable) == NULL);
 }
 
-void end_main() {
-	fprintf(r, "}\n");
-}
-
-void end_function() {
-	fprintf(r, "}\n");
-}
-
-void *malloc_check(size_t length) {
-    void *var;
-
-    if ((var = malloc(length)) == NULL) {
-        fprintf(stderr, "Erreur: mémoire insuffisante\n");
-        exit(EXIT_FAILURE);
-    }
-
-    return var;
-}
-
-void *realloc_check(void *var, size_t length) {
-	if ((var = realloc(var, length)) == NULL) {
-		fprintf(stderr, "Erreur: mémoire insuffisante\n");
-        exit(EXIT_FAILURE);
-	}
-
-	return var;
+int isFunctionCreated(hashList_t *liste, char *function) {
+	return !(findHashList(liste, function) == NULL);
 }
