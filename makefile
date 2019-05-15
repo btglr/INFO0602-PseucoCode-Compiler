@@ -34,10 +34,15 @@ lex.yy.o : lex.yy.c y.tab.h
 lex.yy.c : algorithm.l 
 	flex algorithm.l
 
+run:
+	./algorithm.out $(fileout) < $(filein)
+	gcc $(fileout) -o $(basename $(fileout)).out
+
 clean:
 	rm -f y.tab.*
 	rm -f lex.yy.*
-	rm -f algorithm algorithm.exe algorithm.out
+	rm -f algorithm algorithm.exe
+	rm -rf *.out
 	rm -f *.o
 	rm -f *~
 	rm -f *.stackdump
