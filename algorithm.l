@@ -61,7 +61,7 @@ void yyerror(const char *erreurMsg);
 	return VARIABLE;
 }
 
-\".+\" {
+\"(?:\\.|[^\n"\\])*\" {
 	yylval.string = strdup(yytext);
 	/* strcpy(yylval.output, yytext); */
 	return STRING;
