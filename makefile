@@ -1,5 +1,8 @@
-algorithm: y.tab.o lex.yy.o hashTable.o list.o cell.o
-	gcc -o algorithm.out y.tab.o lex.yy.o hashTable.o list.o cell.o -lm -lfl
+algorithm: y.tab.o lex.yy.o hashTable.o list.o cell.o queue.o memoryUtils.o
+	gcc -o algorithm.out y.tab.o lex.yy.o hashTable.o list.o cell.o queue.o memoryUtils.o -lm -lfl
+
+memoryUtils.o: libs/memoryUtils.h libs/memoryUtils.c
+	gcc -c libs/memoryUtils.c
 
 cell.o: libs/cell.h libs/cell.c
 	gcc -c libs/cell.c
@@ -9,6 +12,9 @@ list.o: libs/list.h libs/list.c
 
 hashTable.o: libs/hashTable.h libs/hashTable.c
 	gcc -c libs/hashTable.c
+
+queue.o: libs/queue.h libs/queue.c
+	gcc -c libs/queue.c
 
 y.tab.o : y.tab.h y.tab.c
 	gcc -c y.tab.c
