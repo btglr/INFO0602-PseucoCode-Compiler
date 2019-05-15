@@ -5,3 +5,15 @@ lex.yy.c
 *.out
 y.output
 *.bin
+.vscode/ipch/6d7e25fe9d1c4bb4/CELL.ipch
+.vscode/ipch/40bf1851c8bbe5f9/QUEUE.ipch
+.vscode/ipch/4613564332152eca/Y.TAB.ipch
+.vscode/ipch/86ffa28d69599690/LIST.ipch
+.vscode/ipch/a93fbc7f5a36355e/MEMORYUTILS.ipch
+algorithm.yacc.1.y
+result.c
+.vscode/ipch/10a5227b43aec152/HASHTABLE.ipch
+.vscode/ipch/4cf0d7155be4251b/RESULT.ipch
+.vscode/ipch/bea72fc4767ed3e0/HASHLIST.ipch
+.vscode/ipch/bea73ac4767ee691/HASHLIST.ipch
+.vscode/ipch/ed436594c42f6aa4/CODEGENERATOR.ipch
