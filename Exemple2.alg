@@ -15,5 +15,5 @@ Algorithme CalculPGCD
   Ecrire("Saisissez un autre entier : ")
   Lire(j)
   Ecrire("Le PGCD de " + i + " et " + j)
-  Ecrire("=" + PGCD(i, j))
+  Ecrire(" = " + PGCD(i, j) + "\n")
 Fin
