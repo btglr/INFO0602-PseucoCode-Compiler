@@ -23,6 +23,7 @@ hashTable_t *mainTable;
 hashTable_t *currentTable;
 queue_t *queue;
 function_t *func;
+int level = 0;
 
 %}
 
@@ -52,8 +53,10 @@ function_t *func;
 %%
 
 program:
-	function algorithm END {
-		end_main(r);
+	{
+		include_librairies(r);
+	} function algorithm END {
+		end_main(r, level);
 		return EXIT_SUCCESS;
 	}
 	| ;
@@ -66,8 +69,8 @@ algorithm:
 		initializeHashTable(mainTable, $2, 256);
 		insertHashList(hashList, mainTable);
 
-    	printf("\tStarted algorithm %s\n", $2);
 		start_main(r, mainTable->name);
+		level += 1;
 
 		currentTable = mainTable;
 
@@ -91,10 +94,13 @@ function:
 
 		func = (function_t*) malloc(sizeof(function_t));
 		func->nbArguments = 0;
+		func->arguments = (argument_t**) malloc(sizeof(argument_t*));
 	} '(' function_definition_arguments ')' ':' VARIABLE_TYPE '\n' {
 		/* Fonction Nom(type nomParam[, type nomParam]) : typeRetour */
 		start_function(r, $2, func, $8);
+		level += 1;
 	} expression END {
+		level -= 1;
 		end_function(r);
 		free($2);
 		free(func);
@@ -118,7 +124,9 @@ function:
 	} '(' function_definition_arguments ')' '\n' {
 		/* Procédure Nom(type nomParam[, type nomParam]) */
 		start_void_function(r, $2, func);
+		level += 1;
 	} expression END {
+		level -= 1;
 		end_function(r);
 		free($2);
 		free(func);
@@ -132,12 +140,13 @@ function_call:
 	| VARIABLE {
 		func = (function_t*) malloc(sizeof(function_t));
 		func->nbArguments = 0;
+		func->arguments = (argument_t**) malloc(sizeof(argument_t*));
 	} '(' function_call_arguments ')' {
 		if (!isFunctionCreated(hashList, $1)) {
 			yyerror("Fonction inconnue");
 		}
 
-		function_call(r, $1, func);
+		function_call(r, level, $1, func);
 
 		free($1);
 		free(func);
@@ -200,22 +209,23 @@ read:
 			initializeCell(cell, $3, TYPE_INT);
 			insertHashTable(currentTable, cell);
 
-			/* Trouver la ligne de déclaration et ajouter toutes les variables de la table des symboles juste après ? */
-			fprintf(r, "int %s;\n", $3);
+			generate_declaration(r, level, $3, TYPE_INT);
 		}
 
 		/* Puis ensuite on effectue le scanf */
-		fprintf(r, "scanf(\"%%d\", &%s);\n", $3);
+		function_scanf(r, level, $3);
 	}
 	;
 
 write:
 	WRITE_OUTPUT '(' full_string ')' {
 		if (!isEmpty(queue)) {
+			print_tabs(r, level);
 			fprintf(r, "printf(\"%s\", ", $3);
 		}
 
 		else {
+			print_tabs(r, level);
 			fprintf(r, "printf(\"%s\"", $3);
 		}
 
@@ -251,12 +261,18 @@ var_or_string:
 	VARIABLE {
 		func = (function_t*) malloc(sizeof(function_t));
 		func->nbArguments = 0;
+		func->arguments = (argument_t**) malloc(sizeof(argument_t*));
 	} '(' function_call_arguments ')' {
 		int i;
 
 		if (!isFunctionCreated(hashList, $1)) {
 			yyerror("Fonction inconnue");
 		}
+
+		/* Création du formattage */
+		size_t length = strlen("%d") + 1;
+		$$ = malloc_check(sizeof(char) * length);
+		snprintf($$, length, "%s", "%d");
 
 		/* Ajouter la fonction à la pile */
 		variable_t *v = (variable_t*) malloc(sizeof(variable_t));
@@ -281,29 +297,26 @@ var_or_string:
 			}
 		}
 
-		size_t length = argLength + strlen($1) + 3;
+		length = argLength + strlen($1) + 3;
 		v->name = malloc(sizeof(char) * length);
 		snprintf(v->name, length, "%s(%s)", $1, argBuffer);
 		v->type = TYPE_INT;
 
 		enqueue(queue, v);
-	} {
-		printf("Appel de fonction dans ecrire\n");
 	}
 	| VARIABLE {
 		cell_t *cell;
 
-		if ((cell = findHashTable(currentTable, $1)) == NULL) {
+		if (!isVariableCreated(currentTable, $1)) {
 			yyerror("Variable inexistante");
 		}
 
+		/* Création du formattage */
 		size_t length = strlen("%d") + 1;
-
 		$$ = malloc_check(sizeof(char) * length);
-
 		snprintf($$, length, "%s", "%d");
 
-		/* Ajouter la variable à une pile */
+		/* Ajout de la variable à une file */
 		variable_t *v = (variable_t*) malloc(sizeof(variable_t));
 		v->name = strdup($1);
 		v->type = TYPE_INT;
@@ -315,7 +328,8 @@ var_or_string:
 		var = strdup($1);
 
 		size_t length = strlen(var);
-
+		
+		/* Si la longueur de la chaîne dépasse 2 caractères, on supprime le premier et dernier (les double-quotes) */
 		if (length > 2) {
 			var++;
 			var[length - 2] = '\0';
@@ -325,14 +339,13 @@ var_or_string:
 			snprintf($$, length, "%s", var);
 		}
 
+		/* Sinon on remplace la chaîne par une chaîne d'un espace */
 		else {
 			var = realloc_check(var, sizeof(char) * 2);
 
 			var[0] = ' ';
 			var[1] = '\0';
 		}
-
-		/* printf("%s", var); */
 	}
 	;
 
@@ -344,40 +357,27 @@ expression:
 
 declaration:
 	VARIABLE '=' plus_minus {
-		cell_t *cell;
-
-		if ((cell = findHashTable(currentTable, $1)) == NULL) {
+		if (!isVariableCreated(currentTable, $1)) {
+			cell_t *cell;
 			cell = (cell_t*) malloc(sizeof(cell_t));
 			initializeCell(cell, $1, TYPE_INT);
 			insertHashTable(currentTable, cell);
+
+			generate_declaration(r, level, $1, TYPE_INT);
 		}
 
-		/* Déclaration de toutes les variables de la table des symboles au début de chaque fonction */
-		fprintf(r, "int %s;\n", $1);
-
-		declaration(r, $1, $3);
+		declaration(r, level, $1, $3);
 	}
 	| VARIABLE '=' BOOLEAN {
-		cell_t *cell;
-
-		if ((cell = findHashTable(currentTable, $1)) == NULL) {
-			cell = (cell_t*) malloc(sizeof(cell_t));
+		if (!isVariableCreated(currentTable, $1)) {
+			cell_t *cell = (cell_t*) malloc(sizeof(cell_t));
 			initializeCell(cell, $1, TYPE_BOOLEAN);
 			insertHashTable(currentTable, cell);
+
+			generate_declaration(r, level, $1, TYPE_BOOLEAN);
 		}
 
-		fprintf(r, "int %s;\n/* Booléen */\n", $1);
-		declaration(r, $1, $3);
-
-		/* else {
-			cell->value = $3;
-		} */
-
-		/* Pas besoin des valeurs, juste de savoir si la variable est déclarée */
-		/*
-		Ajouter $$ = $3 pour l'assignation et comparaison ?
-		Ex: (a = 2) == 0
-		*/
+		declaration(r, level, $1, $3);
 	}
 	;
 
@@ -386,39 +386,34 @@ instruction:
 	| function_call
 	| loop
 	| RETURN value {
-		return_function_value(r, $2);
+		return_function_value(r, level, $2);
 
 		free($2);
 	}
 	| RETURN {
-		return_function(r);
+		return_function(r, level);
 	}
 	;
 
 condition:
 	IF plus_minus COMPARISON_OPERATOR value THEN {
-		printf("Test1: %s\n", $2);
-		printf("Test1: %s\n", $3);
-
-		start_if(r, $2, $3, $4);
+		start_if(r, level, $2, $3, $4);
+		level += 1;
 
 		free($2);
 		free($4);
 	} '\n' expression else_cond END IF {
-		end_if(r);
-	}
-	| IF boolean_expression THEN {
-		/* Equivalent à if(true), je sais pas si c'est nécessaire d'ajouter ça */
-
-	} '\n' expression else_cond END IF {
-		
+		level -= 1;
+		end_if(r, level);
 	}
 	;
 
 else_cond:
 	ELSE {
-		end_if(r);
-		start_else(r);
+		level -= 1;
+		end_if(r, level);
+		start_else(r, level);
+		level += 1;
 	} '\n' expression
 	| ;
 
@@ -429,18 +424,22 @@ loop:
 
 while_loop:
 	WHILE plus_minus COMPARISON_OPERATOR plus_minus DO {
-		start_while(r, $2, $3, $4);
+		start_while(r, level, $2, $3, $4);
+		level += 1;
 
 		free($2);
 		free($4);
 	} '\n' expression END WHILE {
-		end_while(r);
+		level -= 1;
+		end_while(r, level);
 	}
 	| WHILE boolean_expression DO {
-		start_while_true(r);
+		start_while_true(r, level);
+		level += 1;
 		free($2);
 	} '\n' expression END WHILE {
-		end_while(r);
+		level -= 1;
+		end_while(r, level);
 	}
 	;
 
@@ -450,31 +449,39 @@ for_loop:
 			cell_t *cell = (cell_t*) malloc(sizeof(cell_t));
 			initializeCell(cell, $2, TYPE_INT);
 			insertHashTable(currentTable, cell);
+
+			generate_declaration(r, level, $2, TYPE_INT);
 		}
 
-		start_for(r, $2, atoi($4), atoi($6));
+		start_for(r, level, $2, atoi($4), atoi($6));
+		level += 1;
 
 		free($2);
 		free($4);
 		free($6);
 	} '\n' expression END FOR {
-		end_for(r);
+		level -= 1;
+		end_for(r, level);
 	}
 	| FOR VARIABLE FROM INT TO INT STEP INT DO {
 		if (!isVariableCreated(currentTable, $1)) {
 			cell_t *cell = (cell_t*) malloc(sizeof(cell_t));
 			initializeCell(cell, $2, TYPE_INT);
 			insertHashTable(currentTable, cell);
+
+			generate_declaration(r, level, $2, TYPE_INT);
 		}
 
-		start_for_step(r, $2, atoi($4), atoi($6), atoi($8));
+		start_for_step(r, level, $2, atoi($4), atoi($6), atoi($8));
+		level += 1;
 
 		free($2);
 		free($4);
 		free($6);
 		free($8);
 	} '\n' expression END FOR {
-		end_for(r);
+		level -= 1;
+		end_for(r, level);
 	}
 	;
 
@@ -598,18 +605,21 @@ number:
 		snprintf($$, length, "%s", $1);
 
 		free($1);
-
-		printf("$$ = %s\n", $$);
 	}
 	;
 
 %%
 
-int main(void) {
+int main(int argc, char *argv[]) {
 	hashList = (hashList_t*) malloc(sizeof(hashList_t));
 	initializeHashList(hashList);
 
-	r = fopen("result.c", "w");
+	if (argc == 2) {
+		r = fopen(argv[1], "w");
+	}
+	else {
+		r = fopen("result.c", "w");
+	}
 
 	/* Correspond au nombre maximum de variables pouvant être ajoutées à un "Ecrire" */
 	queue = createQueue(255);
