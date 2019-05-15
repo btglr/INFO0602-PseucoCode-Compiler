@@ -4,16 +4,16 @@ Fonction PGCD(entier i, entier j) : entier
   Tant que b != 0 Faire
     tmp = a
     a = b
-    b = tmp % 0
+    b = tmp % b
   Fin Tant que
   retour a
 Fin
 
 Algorithme CalculPGCD
-  Écrire("Saisissez un entier : ")
+  Ecrire("Saisissez un entier : ")
   Lire(i)
-  Écrire("Saisissez un autre entier : ")
+  Ecrire("Saisissez un autre entier : ")
   Lire(j)
-  Écrire("Le PGCD de " + i + " et " + j)
+  Ecrire("Le PGCD de " + i + " et " + j)
   Ecrire("=" + PGCD(i, j))
 Fin
