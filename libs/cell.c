@@ -19,23 +19,3 @@ void destroyCell(cell_t *cell) {
     free(cell->name);
     free(cell);
 }
-
-char* getVariableType(variable_type type) {
-    switch (type) {
-        case TYPE_BOOLEAN:
-        case TYPE_INT:
-            return "int";
-    }
-}
-
-variable_type charToVariableType(char *type) {
-    variable_type rtype;
-
-    if (strcmp(type, "entier") == 0) {
-        rtype = TYPE_INT;
-    }
-
-    else if (strcmp(type, "booléen") == 0) {
-
-    }
-}

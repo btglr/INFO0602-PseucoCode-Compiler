@@ -25,7 +25,5 @@ typedef struct cell {
 
 void initializeCell(cell_t*, char*, variable_type);
 void destroyCell(cell_t*);
-char* getVariableType(variable_type type);
-variable_type charToVariableType(char *type);
 
 #endif
