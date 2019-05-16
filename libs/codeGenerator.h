@@ -3,6 +3,7 @@
 
 #include "cell.h"
 #include "hashTable.h"
+#include "queue.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -21,6 +22,7 @@ void start_main(FILE *r, char *name);
 void declaration(FILE *r, int level, char *name, char *value);
 void function_call(FILE *r, int level, char *name, function_t *func);
 void function_scanf(FILE *r, int level, char *name);
+void function_printf(FILE *r, int level, char *format, queue_t *values);
 void return_function(FILE *r, int level);
 void return_function_value(FILE *r, int level, char *value);
 

@@ -11,8 +11,6 @@ void start_void_function(FILE *r, char *name, function_t *func) {
 }
 
 void start_function(FILE *r, char *name, function_t *func, variable_type return_type) {
-	char *parameterPair;
-	char *parameter;
     size_t i;
     char type[10];
 
@@ -110,6 +108,32 @@ void function_call(FILE *r, int level, char *name, function_t *func) {
 void function_scanf(FILE *r, int level, char *name) {
     print_tabs(r, level);
     fprintf(r, "scanf(\"%%d\", &%s);\n", name);
+}
+
+void function_printf(FILE *r, int level, char *format, queue_t *values) {
+    print_tabs(r, level);
+
+    if (!isEmpty(values)) {
+        fprintf(r, "printf(\"%s\", ", format);
+    }
+
+    else {
+        fprintf(r, "printf(\"%s\"", format);
+    }
+
+    while (!isEmpty(values)) {
+        variable_t *v = dequeue(values);
+
+        /* Si vide on ne met pas de virgule */
+        if (isEmpty(values)) {
+            fprintf(r, "%s", v->name);
+        }
+        else {
+            fprintf(r, "%s, ", v->name);
+        }
+    }
+
+    fprintf(r, ");\n");
 }
 
 void return_function(FILE *r, int level) {
