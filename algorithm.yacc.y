@@ -11,13 +11,12 @@
 
 #define YYDEBUG 0
 
-FILE *r;
-
 void yyerror(const char *erreurMsg);
 int isVariableCreated(hashTable_t *table, char *variable);
 int isFunctionCreated(hashList_t *liste, char *function);
 int yylex();
 
+FILE *r;
 hashList_t *hashList;
 hashTable_t *mainTable;
 hashTable_t *currentTable;
@@ -28,7 +27,6 @@ int level = 0;
 %}
 
 %union {
-	int integer;
 	char *variable;
 	char *string;
 	variable_type vtype;
@@ -36,11 +34,11 @@ int level = 0;
 
 %token BEGIN_ALGORITHM END BEGIN_FUNCTION BEGIN_PROCEDURE
 %token<string> FOR WHILE IF ELSE WRITE_OUTPUT READ_INPUT DO THEN RETURN FROM TO STEP
-%token<vtype> VARIABLE_TYPE
 %token<string> COMPARISON_OPERATOR
 %token<string> BOOLEAN INT
-%token<variable> VARIABLE
 %token<string> STRING
+%token<variable> VARIABLE
+%token<vtype> VARIABLE_TYPE
 %type<string> plus_minus
 %type<string> multiply_divide
 %type<string> number
@@ -80,11 +78,13 @@ algorithm:
 
 function:
 	BEGIN_FUNCTION VARIABLE {
+		hashTable_t *funcTable;
+
 		if (isFunctionCreated(hashList, $2)) {
 			yyerror("Fonction deja existante");
 		}
-
-		hashTable_t *funcTable = (hashTable_t*) malloc(sizeof(hashTable_t));
+		
+		funcTable = (hashTable_t*) malloc(sizeof(hashTable_t));
 
 		/* Insertion de la table main */
 		initializeHashTable(funcTable, $2, 256);
@@ -102,15 +102,18 @@ function:
 	} expression END {
 		level -= 1;
 		end_function(r);
+
 		free($2);
 		free(func);
 	} '\n' function
 	| BEGIN_PROCEDURE VARIABLE {
+		hashTable_t *funcTable;
+
 		if (isFunctionCreated(hashList, $2)) {
 			yyerror("Fonction deja existante");
 		}
 
-		hashTable_t *funcTable = (hashTable_t*) malloc(sizeof(hashTable_t));
+		funcTable = (hashTable_t*) malloc(sizeof(hashTable_t));
 
 		/* Insertion de la table main */
 		initializeHashTable(funcTable, $2, 256);
@@ -128,6 +131,7 @@ function:
 	} expression END {
 		level -= 1;
 		end_function(r);
+
 		free($2);
 		free(func);
 	} '\n' function
@@ -160,18 +164,21 @@ function_definition_arguments:
 
 arguments:
 	VARIABLE_TYPE VARIABLE {
+		cell_t *cell;
+		argument_t *arg;
+
 		if (isVariableCreated(currentTable, $2)) {
 			yyerror("Variable déjà existante dans la définition de fonction");
 		}
 
-		cell_t *cell = (cell_t*) malloc(sizeof(cell_t));
+		cell = (cell_t*) malloc(sizeof(cell_t));
 		initializeCell(cell, $2, $1);
 		insertHashTable(currentTable, cell);
 		
 		func->nbArguments += 1;
 		func->arguments = realloc(func->arguments, sizeof(argument_t*) * func->nbArguments);
 
-		argument_t *arg = (argument_t*) malloc(sizeof(argument_t));
+		arg = (argument_t*) malloc(sizeof(argument_t));
 		arg->type = $1;
 		arg->name = strdup($2);
 
@@ -188,10 +195,12 @@ function_call_arguments:
 
 arguments_without_types:
 	plus_minus {
+		argument_t *arg;
+
 		func->nbArguments += 1;
 		func->arguments = realloc(func->arguments, sizeof(argument_t*) * func->nbArguments);
 
-		argument_t *arg = (argument_t*) malloc(sizeof(argument_t));
+		arg = (argument_t*) malloc(sizeof(argument_t));
 		arg->type = TYPE_VOID;
 		arg->name = strdup($1);
 
@@ -219,40 +228,19 @@ read:
 
 write:
 	WRITE_OUTPUT '(' full_string ')' {
-		if (!isEmpty(queue)) {
-			print_tabs(r, level);
-			fprintf(r, "printf(\"%s\", ", $3);
-		}
-
-		else {
-			print_tabs(r, level);
-			fprintf(r, "printf(\"%s\"", $3);
-		}
-
-		while (!isEmpty(queue)) {
-			variable_t *v = dequeue(queue);
-
-			/* Si vide on ne met pas de virgule */
-			if (isEmpty(queue)) {
-				fprintf(r, "%s", v->name);
-			}
-			else {
-				fprintf(r, "%s, ", v->name);
-			}
-		}
-
-		fprintf(r, ");\n");
+		function_printf(r, level, $3, queue);
 	}
 	;
 
 full_string:
 	full_string '+' var_or_string {
-		/* printf("%s %s\n", $1, $$); */
-
 		size_t length = strlen($1) + strlen($3) + 1;
 		$$ = malloc_check(sizeof(char) * length);
 
 		snprintf($$, length, "%s%s", $1, $3);
+
+		free($1);
+		free($3);
 	}
 	| var_or_string
 	;
@@ -264,88 +252,97 @@ var_or_string:
 		func->arguments = (argument_t**) malloc(sizeof(argument_t*));
 	} '(' function_call_arguments ')' {
 		int i;
+		variable_t *v;
+		size_t argLength, length;
+		char *argBuffer;
 
 		if (!isFunctionCreated(hashList, $1)) {
 			yyerror("Fonction inconnue");
 		}
 
 		/* Création du formattage */
-		size_t length = strlen("%d") + 1;
+		length = strlen("%d") + 1;
 		$$ = malloc_check(sizeof(char) * length);
 		snprintf($$, length, "%s", "%d");
 
 		/* Ajouter la fonction à la pile */
-		variable_t *v = (variable_t*) malloc(sizeof(variable_t));
+		v = (variable_t*) malloc(sizeof(variable_t));
 		
-		size_t argLength = 0;
-
+		argLength = 0;
 		for (i = 0; i < func->nbArguments; ++i) {
 			/* + 2 pour la virgule et l'espace */
 			argLength += strlen(func->arguments[i]->name) + 2;
 		}
 		/* -2 pour supprimer la dernière virgule et le dernier espace, +1 pour le \0 */
-		argLength -= 1;
 
-		char *argBuffer = (char*) malloc(sizeof(char) * argLength);
+		if (argLength != 0) {
+			argLength -= 1;
+			argBuffer = (char*) malloc(sizeof(char) * argLength);
+			
+			for (i = 0; i < func->nbArguments; ++i) {
+				if (i < func->nbArguments - 1) {
+					snprintf(argBuffer + strlen(argBuffer), argLength, "%s, ", func->arguments[i]->name);
+				}
+				else {
+					snprintf(argBuffer + strlen(argBuffer), argLength, "%s", func->arguments[i]->name);
+				}
+			}
 
-		for (i = 0; i < func->nbArguments; ++i) {
-			if (i < func->nbArguments - 1) {
-				snprintf(argBuffer + strlen(argBuffer), argLength, "%s, ", func->arguments[i]->name);
-			}
-			else {
-				snprintf(argBuffer + strlen(argBuffer), argLength, "%s", func->arguments[i]->name);
-			}
+			length = argLength + strlen($1) + 3;
+			v->name = malloc(sizeof(char) * length);
+			snprintf(v->name, length, "%s(%s)", $1, argBuffer);
+			v->type = TYPE_INT;
+
+			enqueue(queue, v);
 		}
 
-		length = argLength + strlen($1) + 3;
-		v->name = malloc(sizeof(char) * length);
-		snprintf(v->name, length, "%s(%s)", $1, argBuffer);
-		v->type = TYPE_INT;
-
-		enqueue(queue, v);
+		free($1);
 	}
 	| VARIABLE {
-		cell_t *cell;
+		size_t length;
+		variable_t *v;
 
 		if (!isVariableCreated(currentTable, $1)) {
 			yyerror("Variable inexistante");
 		}
 
 		/* Création du formattage */
-		size_t length = strlen("%d") + 1;
+		length = strlen("%d") + 1;
 		$$ = malloc_check(sizeof(char) * length);
 		snprintf($$, length, "%s", "%d");
 
 		/* Ajout de la variable à une file */
-		variable_t *v = (variable_t*) malloc(sizeof(variable_t));
+		v = (variable_t*) malloc(sizeof(variable_t));
 		v->name = strdup($1);
 		v->type = TYPE_INT;
 
 		enqueue(queue, v);
+
+		free($1);
 	}
 	| STRING {
-		char *var;
-		var = strdup($1);
-
+		char *var = strdup($1);
 		size_t length = strlen(var);
 		
 		/* Si la longueur de la chaîne dépasse 2 caractères, on supprime le premier et dernier (les double-quotes) */
 		if (length > 2) {
 			var++;
 			var[length - 2] = '\0';
-			length = strlen(var) + 1;
-
-			$$ = (char*) malloc_check(sizeof(char) * length);
-			snprintf($$, length, "%s", var);
 		}
 
 		/* Sinon on remplace la chaîne par une chaîne d'un espace */
 		else {
-			var = realloc_check(var, sizeof(char) * 2);
-
+			var = realloc_check(var, sizeof(char));
 			var[0] = ' ';
-			var[1] = '\0';
 		}
+
+		length = strlen(var) + 1;
+
+		$$ = (char*) malloc_check(sizeof(char) * length);
+		snprintf($$, length, "%s", var);
+
+		free($1);
+		/* free(var); */
 	}
 	;
 
@@ -367,6 +364,9 @@ declaration:
 		}
 
 		declaration(r, level, $1, $3);
+
+		free($1);
+		free($3);
 	}
 	| VARIABLE '=' BOOLEAN {
 		if (!isVariableCreated(currentTable, $1)) {
@@ -378,6 +378,9 @@ declaration:
 		}
 
 		declaration(r, level, $1, $3);
+
+		free($1);
+		free($3);
 	}
 	;
 
@@ -532,11 +535,13 @@ plus_minus:
 
 multiply_divide:
 	multiply_divide '/' number {
+		size_t length;
+
 		if (atoi($3) == 0) {
 			yyerror("Division par zero");
 		}
 		
-		size_t length = strlen($1) + strlen($3) + 4;
+		length = strlen($1) + strlen($3) + 4;
 		$$ = malloc_check(sizeof(char) * length);
 		snprintf($$, length, "%s / %s", $1, $3);
 
@@ -544,7 +549,9 @@ multiply_divide:
 		free($3);
 	}
 	| multiply_divide '*' number {
-		size_t length = strlen($1) + strlen($3) + 4;
+		size_t length;
+		
+		length = strlen($1) + strlen($3) + 4;
 		$$ = malloc_check(sizeof(char) * length);
 		snprintf($$, length, "%s * %s", $1, $3);
 
@@ -552,12 +559,14 @@ multiply_divide:
 		free($3);
 	}
 	| multiply_divide '%' number {
+		size_t length;
+
 		if (!(strlen($3) == 1 && isalpha($3[0])) && atoi($3) == 0) {
 			printf("Test: \"%s\"", $3);
 			yyerror("Division par zero via modulo");
 		}
-
-		size_t length = strlen($1) + strlen($3) + 4;
+		
+		length = strlen($1) + strlen($3) + 4;
 		$$ = malloc_check(sizeof(char) * length);
 		snprintf($$, length, "%s %% %s", $1, $3);
 
@@ -590,17 +599,20 @@ number:
 		free($1);
 	}
 	| VARIABLE {
+		cell_t *cell;
+		size_t length;
+
 		if (!isVariableCreated(currentTable, $1)) {
 			yyerror("Variable inexistante dans opération");
 		}
 
-		cell_t *cell = findHashTable(currentTable, $1);
+		cell = findHashTable(currentTable, $1);
 
 		if (cell->type == TYPE_BOOLEAN) {
 			yyerror("Impossible d'effectuer des opérations avec un booleen");
 		}
 
-		size_t length = strlen($1) + 1;
+		length = strlen($1) + 1;
 		$$ = malloc_check(sizeof(char) * length);
 		snprintf($$, length, "%s", $1);
 
