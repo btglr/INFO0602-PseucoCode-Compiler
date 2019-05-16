@@ -69,6 +69,8 @@ void toLowerString(char *);
 		snprintf(yylval.string, 2, "%s", "0");
 	}
 
+	free(lower);
+
 	return BOOLEAN;
 }
 

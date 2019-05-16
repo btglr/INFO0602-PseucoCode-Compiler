@@ -44,8 +44,6 @@ void start_function(FILE *r, char *name, function_t *func, variable_type return_
         }
     }
     fprintf(r, ") {\n");
-
-	free(name); 
 }
 
 void start_if(FILE *r, int level, char *cmp1, char *operator, char *cmp2) {
@@ -131,6 +129,9 @@ void function_printf(FILE *r, int level, char *format, queue_t *values) {
         else {
             fprintf(r, "%s, ", v->name);
         }
+
+        free(v->name);
+        free(v);
     }
 
     fprintf(r, ");\n");

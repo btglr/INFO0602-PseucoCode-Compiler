@@ -15,18 +15,20 @@ void destroyHashList(hashList_t *list) {
             curr = curr->next;
             destroyHashTable(tmp);
         }
+
+        free(list);
     }
 }
 
 void insertHashList(hashList_t *list, hashTable_t *table) {
     table->next = list->head;
+    table->prev = NULL;
 
     if(list->head != NULL) {
         (list->head)->prev = table;
     }
 
     list->head = table;
-    table->prev = NULL;
 }
 
 hashTable_t *findHashList(hashList_t *list, char *name) {

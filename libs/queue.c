@@ -18,6 +18,7 @@ void destroyQueue(queue_t *queue) {
     while (!isEmpty(queue)) {
         elem = dequeue(queue);
         free(elem->name);
+        free(elem);
     }
 
     free(queue->variables);

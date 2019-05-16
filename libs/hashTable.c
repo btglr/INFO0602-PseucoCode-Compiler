@@ -1,6 +1,7 @@
 #include "hashTable.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 int hash(int k, int size) {
     return k % size;
@@ -21,8 +22,18 @@ void initializeHashTable(hashTable_t *ht, char* name, int size) {
 }
 
 void destroyHashTable(hashTable_t *ht) {
-    destroyList(ht->list);
-    /* free(ht); */
+    size_t i;
+
+    if (ht != NULL) {
+        free(ht->name);
+
+        for (i = 0; i < ht->tabSize; ++i) {
+            destroyList(&ht->list[i]);
+        }
+
+        free(ht->list);
+        free(ht);
+    }
 }
 
 void insertHashTable(hashTable_t *ht, cell_t *cell) {
@@ -48,9 +59,12 @@ void removeFromHashTable(hashTable_t *th, cell_t *cell) {
 
 int convertStringToInt(char *str) {
     size_t i;
+    size_t length;
     int total = 0;
 
-    for (i = 0; i < strlen(str); ++i) {
+    length = strlen(str);
+
+    for (i = 0; i < length; ++i) {
         total += str[i];
     }
 

@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include "list.h"
+#include <unistd.h>
 
 void initializeList(list_t *list) {
     list->head = NULL;
@@ -13,6 +15,7 @@ void destroyList(list_t *list) {
         while(curr != NULL) {
             tmp = curr;
             curr = curr->next;
+
             destroyCell(tmp);
         }
     }
@@ -20,13 +23,13 @@ void destroyList(list_t *list) {
 
 void insertList(list_t *list, cell_t *cell) {
     cell->next = list->head;
+    cell->prev = NULL;
 
     if(list->head != NULL) {
         (list->head)->prev = cell;
     }
 
     list->head = cell;
-    cell->prev = NULL;
 }
 
 cell_t *findList(list_t *list, char *name) {

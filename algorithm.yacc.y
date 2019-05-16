@@ -12,8 +12,9 @@
 #define YYDEBUG 0
 
 void yyerror(const char *erreurMsg);
+int yylex_destroy();
 int isVariableCreated(hashTable_t *table, char *variable);
-int isFunctionCreated(hashList_t *liste, char *function);
+int isFunctionCreated(hashList_t *list, char *function);
 int yylex();
 
 FILE *r;
@@ -60,7 +61,7 @@ program:
 	| ;
 
 algorithm:
-	BEGIN_ALGORITHM VARIABLE '\n' {
+	BEGIN_ALGORITHM VARIABLE {
 		mainTable = (hashTable_t*) malloc(sizeof(hashTable_t));
 
 		/* Insertion de la table main */
@@ -71,9 +72,9 @@ algorithm:
 		level += 1;
 
 		currentTable = mainTable;
-
+	} '\n' expression {
 		free($2);
-	} expression
+	}
 	;
 
 function:
@@ -104,7 +105,7 @@ function:
 		end_function(r);
 
 		free($2);
-		free(func);
+		destroyFunction(func);
 	} '\n' function
 	| BEGIN_PROCEDURE VARIABLE {
 		hashTable_t *funcTable;
@@ -133,7 +134,7 @@ function:
 		end_function(r);
 
 		free($2);
-		free(func);
+		destroyFunction(func);
 	} '\n' function
 	| '\n' function
 	| ;
@@ -153,7 +154,7 @@ function_call:
 		function_call(r, level, $1, func);
 
 		free($1);
-		free(func);
+		destroyFunction(func);
 	}
 	;
 
@@ -223,12 +224,16 @@ read:
 
 		/* Puis ensuite on effectue le scanf */
 		function_scanf(r, level, $3);
+
+		free($3);
 	}
 	;
 
 write:
 	WRITE_OUTPUT '(' full_string ')' {
 		function_printf(r, level, $3, queue);
+
+		free($3);
 	}
 	;
 
@@ -264,9 +269,6 @@ var_or_string:
 		length = strlen("%d") + 1;
 		$$ = malloc_check(sizeof(char) * length);
 		snprintf($$, length, "%s", "%d");
-
-		/* Ajouter la fonction à la pile */
-		v = (variable_t*) malloc(sizeof(variable_t));
 		
 		argLength = 0;
 		for (i = 0; i < func->nbArguments; ++i) {
@@ -288,6 +290,8 @@ var_or_string:
 				}
 			}
 
+			/* Ajouter la fonction à la file */
+			v = (variable_t*) malloc(sizeof(variable_t));
 			length = argLength + strlen($1) + 3;
 			v->name = malloc(sizeof(char) * length);
 			snprintf(v->name, length, "%s(%s)", $1, argBuffer);
@@ -321,28 +325,37 @@ var_or_string:
 		free($1);
 	}
 	| STRING {
-		char *var = strdup($1);
-		size_t length = strlen(var);
+		size_t i;
+		size_t length;
+		char *var;
+		
+		length = strlen($1);
 		
 		/* Si la longueur de la chaîne dépasse 2 caractères, on supprime le premier et dernier (les double-quotes) */
 		if (length > 2) {
-			var++;
-			var[length - 2] = '\0';
+			var = (char*) malloc_check(sizeof(char) * (length - 1));
+
+			for (i = 1; i < length - 1; ++i) {
+				var[i - 1] = $1[i];
+			}
+
+			var[length - 2] = 0;
 		}
 
 		/* Sinon on remplace la chaîne par une chaîne d'un espace */
 		else {
-			var = realloc_check(var, sizeof(char));
+			var = (char*) malloc_check(sizeof(char) * 2);
 			var[0] = ' ';
+			var[1] = '\0';
 		}
 
-		length = strlen(var) + 1;
+		length = strlen(var) + 2;
 
 		$$ = (char*) malloc_check(sizeof(char) * length);
 		snprintf($$, length, "%s", var);
 
 		free($1);
-		/* free(var); */
+		free(var);
 	}
 	;
 
@@ -404,6 +417,7 @@ condition:
 		level += 1;
 
 		free($2);
+		free($3);
 		free($4);
 	} '\n' expression else_cond END IF {
 		level -= 1;
@@ -431,6 +445,7 @@ while_loop:
 		level += 1;
 
 		free($2);
+		free($3);
 		free($4);
 	} '\n' expression END WHILE {
 		level -= 1;
@@ -641,6 +656,7 @@ int main(int argc, char *argv[]) {
 	#endif 
 
 	yyparse();
+	yylex_destroy();
 
 	fclose(r);
 	destroyHashList(hashList);;
@@ -664,6 +680,6 @@ int isVariableCreated(hashTable_t *table, char *variable) {
 	return !(findHashTable(table, variable) == NULL);
 }
 
-int isFunctionCreated(hashList_t *liste, char *function) {
-	return !(findHashList(liste, function) == NULL);
+int isFunctionCreated(hashList_t *list, char *function) {
+	return !(findHashList(list, function) == NULL);
 }

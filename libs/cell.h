@@ -25,5 +25,6 @@ typedef struct cell {
 
 void initializeCell(cell_t*, char*, variable_type);
 void destroyCell(cell_t*);
+void destroyFunction(function_t*);
 
 #endif

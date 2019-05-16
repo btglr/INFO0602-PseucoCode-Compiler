@@ -5,7 +5,9 @@
 #include "memoryUtils.h"
 
 void initializeCell(cell_t *cell, char *name, variable_type type) {
-    if ((cell->name = strdup(name)) == NULL) {
+    cell->name = strdup(name);
+
+    if (cell->name == NULL) {
         fprintf(stderr, "Erreur: mémoire insuffisante\n");
         exit(EXIT_FAILURE);
     }
@@ -18,4 +20,16 @@ void initializeCell(cell_t *cell, char *name, variable_type type) {
 void destroyCell(cell_t *cell) {
     free(cell->name);
     free(cell);
+}
+
+void destroyFunction(function_t* func) {
+    int i;
+
+    for (i = 0; i < func->nbArguments; ++i) {
+        free(func->arguments[i]->name);
+        free(func->arguments[i]);
+    }
+
+    free(func->arguments);
+    free(func);
 }
