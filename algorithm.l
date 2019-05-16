@@ -30,41 +30,30 @@ void toLowerString(char *);
 (?i:fonction) { return BEGIN_FUNCTION; }
 (?i:fin) { return END; }
 
-(?i:entier|booléen|booleen) {
-	char *lower = strdup(yytext);
-	toLowerString(lower);
-
-	if (strcmp(lower, "entier") == 0) {
-		yylval.vtype = TYPE_INT;
-	}
-
-	else {
-		yylval.vtype = TYPE_BOOLEAN;
-	}
-
+(?i:entier) {
+	yylval.vtype = TYPE_INT;
 	return VARIABLE_TYPE;
 }
- /* (?i:bool[é|e]en) { return TYPE_BOOLEAN; } */
+
+(?i:booléen|booleen) {
+	yylval.vtype = TYPE_BOOLEAN;
+	return VARIABLE_TYPE;
+}
 
 "=="|"!=" {
 	yylval.string = strdup(yytext);
 	return COMPARISON_OPERATOR;
 }
 
- /* "+"|"-"|"/"|"*"|"%" { return OPERATION_OPERATOR; } */
- /* "(" { return OPENING_PARENTHESIS; }
-	")" { return CLOSING_PARENTHESIS; } */
- /* "=" { return ASSIGNMENT_OPERATOR; } */
- /* "+" { return OPERATOR_PLUS; }
-	"-" { return OPERATOR_MINUS; }
-	"*" { return OPERATOR_MULTIPLY; }
-	"/" { return OPERATOR_DIVIDE; }
-	"%" { return OPERATOR_MODULO; } */
-
 [0-9]+ {
 	yylval.string = strdup(yytext);
 	return INT;
 }
+
+	/* [0-9]+\.[0-9]+ {
+	yylval.string = strdup(yytext);
+	return DOUBLE;
+} */
 
 (?i:vrai|faux) {
 	char *lower = strdup(yytext);
