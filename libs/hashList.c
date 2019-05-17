@@ -7,10 +7,10 @@ void initializeHashList(hashList_t *list) {
 }
 
 void destroyHashList(hashList_t *list) {
-    if(list != NULL) {
+    if(list) {
         hashTable_t *curr = list->head, *tmp;
 
-        while(curr != NULL) {
+        while(curr) {
             tmp = curr;
             curr = curr->next;
             destroyHashTable(tmp);
@@ -24,7 +24,7 @@ void insertHashList(hashList_t *list, hashTable_t *table) {
     table->next = list->head;
     table->prev = NULL;
 
-    if(list->head != NULL) {
+    if(list->head) {
         (list->head)->prev = table;
     }
 
@@ -34,7 +34,7 @@ void insertHashList(hashList_t *list, hashTable_t *table) {
 hashTable_t *findHashList(hashList_t *list, char *name) {
     hashTable_t* curr = list->head;
 
-    while(curr != NULL && strcmp(curr->name, name) != 0) {
+    while(curr && strcmp(curr->name, name) != 0) {
         curr = curr->next;
     }
 
