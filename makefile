@@ -1,4 +1,4 @@
-FLAGS = -Wall -O3 -Werror -ansi -pedantic -ggdb3 -D_POSIX_C_SOURCE=200809L
+FLAGS = -Wall -O3 -Werror -ansi -pedantic -D_POSIX_C_SOURCE=200809L
 LIBS = -lm -lfl
 
 algorithm: y.tab.o lex.yy.o hashTable.o list.o cell.o queue.o memoryUtils.o hashList.o codeGenerator.o
