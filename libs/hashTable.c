@@ -12,6 +12,7 @@ void initializeHashTable(hashTable_t *ht, char* name, int size) {
 
     ht->name = strdup(name);
     ht->list = (list_t*) malloc(sizeof(list_t) * size);
+    ht->function = NULL;
     ht->tabSize = size;
     ht->prev = NULL;
     ht->next = NULL;
@@ -24,11 +25,15 @@ void initializeHashTable(hashTable_t *ht, char* name, int size) {
 void destroyHashTable(hashTable_t *ht) {
     size_t i;
 
-    if (ht != NULL) {
+    if (ht) {
         free(ht->name);
 
         for (i = 0; i < ht->tabSize; ++i) {
             destroyList(&ht->list[i]);
+        }
+
+        if (ht->function) {
+            destroyFunction(ht->function);
         }
 
         free(ht->list);

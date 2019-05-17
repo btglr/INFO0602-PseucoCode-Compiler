@@ -7,6 +7,8 @@ typedef struct hashTable {
     char *name;
     list_t *list;
     int tabSize;
+    function_t *function;
+    variable_type returnType;
 
     struct hashTable *prev, *next;
 } hashTable_t;
