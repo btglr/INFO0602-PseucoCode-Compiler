@@ -28,12 +28,7 @@ void return_function_value(FILE *r, int level, char *value);
 
 void generate_declaration(FILE *r, int level, char *name, variable_type type);
 
-void end_void_function(FILE *r);
-void end_function(FILE *r);
-void end_if(FILE *r, int level);
-void end_else(FILE *r, int level);
-void end_for(FILE *r, int level);
-void end_while(FILE *r, int level);
+void end_block(FILE *r, int level);
 void end_main(FILE *r, int level);
 
 void print_tabs(FILE *r, int nb);

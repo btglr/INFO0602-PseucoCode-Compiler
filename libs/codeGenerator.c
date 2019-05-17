@@ -177,30 +177,7 @@ void generate_declaration(FILE *r, int level, char *name, variable_type type) {
     fprintf(r, "%s;\n", name);
 }
 
-void end_void_function(FILE *r) {
-    fprintf(r, "}\n");
-}
-
-void end_function(FILE *r) {
-    fprintf(r, "}\n");
-}
-
-void end_if(FILE *r, int level) {
-    print_tabs(r, level);
-    fprintf(r, "}\n");
-}
-
-void end_else(FILE *r, int level) {
-    print_tabs(r, level);
-    fprintf(r, "}\n");
-}
-
-void end_for(FILE *r, int level) {
-    print_tabs(r, level);
-    fprintf(r, "}\n");
-}
-
-void end_while(FILE *r, int level) {
+void end_block(FILE *r, int level) {
     print_tabs(r, level);
     fprintf(r, "}\n");
 }

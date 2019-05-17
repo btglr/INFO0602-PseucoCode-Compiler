@@ -104,7 +104,7 @@ function:
 		level += 1;
 	} expression END {
 		level -= 1;
-		end_function(r);
+		end_block(r, level);
 
 		free($2);
 	} '\n' function
@@ -134,7 +134,7 @@ function:
 		level += 1;
 	} expression END {
 		level -= 1;
-		end_function(r);
+		end_block(r, level);
 
 		free($2);
 	} '\n' function
@@ -489,14 +489,14 @@ condition:
 		free($4);
 	} '\n' expression else_cond END IF {
 		level -= 1;
-		end_if(r, level);
+		end_block(r, level);
 	}
 	;
 
 else_cond:
 	ELSE {
 		level -= 1;
-		end_if(r, level);
+		end_block(r, level);
 		start_else(r, level);
 		level += 1;
 	} '\n' expression
@@ -517,7 +517,7 @@ while_loop:
 		free($4);
 	} '\n' expression END WHILE {
 		level -= 1;
-		end_while(r, level);
+		end_block(r, level);
 	}
 	| WHILE boolean_expression DO {
 		start_while_true(r, level, $2);
@@ -525,7 +525,7 @@ while_loop:
 		free($2);
 	} '\n' expression END WHILE {
 		level -= 1;
-		end_while(r, level);
+		end_block(r, level);
 	}
 	;
 
@@ -547,7 +547,7 @@ for_loop:
 		free($6);
 	} '\n' expression END FOR {
 		level -= 1;
-		end_for(r, level);
+		end_block(r, level);
 	}
 	| FOR VARIABLE FROM INT TO INT STEP INT DO {
 		if (!isVariableCreated(currentTable, $1)) {
@@ -567,7 +567,7 @@ for_loop:
 		free($8);
 	} '\n' expression END FOR {
 		level -= 1;
-		end_for(r, level);
+		end_block(r, level);
 	}
 	;
 
@@ -741,17 +741,6 @@ int main(int argc, char *argv[]) {
 	destroyQueue(queue);
 
   	return EXIT_SUCCESS;
-}
-
-int getIntegerLength(int value) {
-	int length = !value;
-
-	while(value) {
-		length++;
-		value /= 10;
-	}
-
-	return length;
 }
 
 int isVariableCreated(hashTable_t *table, char *variable) {
