@@ -59,14 +59,14 @@ void toLowerString(char *);
 	char *lower = strdup(yytext);
 	toLowerString(lower);
 
-	yylval.string = (char*) malloc(sizeof(char) * 2);
-
 	if (strcmp(lower, "vrai") == 0) {
-		snprintf(yylval.string, 2, "%s", "1");
+		yylval.string = (char*) malloc(sizeof(char) * 5);
+		snprintf(yylval.string, 5, "%s", "true");
 	}
 
 	else {
-		snprintf(yylval.string, 2, "%s", "0");
+		yylval.string = (char*) malloc(sizeof(char) * 6);
+		snprintf(yylval.string, 6, "%s", "false");
 	}
 
 	free(lower);
@@ -84,7 +84,7 @@ void toLowerString(char *);
 	return STRING;
 }
 
-[\:,=\n\(\)\*\+\-\/\%] {
+[\:,=\n\(\)\*\+\-\/\%!] {
 	return *yytext;
 }
 
