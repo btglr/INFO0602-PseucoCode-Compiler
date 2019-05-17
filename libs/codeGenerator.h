@@ -16,7 +16,7 @@ void start_else(FILE *r, int level);
 void start_for(FILE *r, int level, char *var, int from, int to);
 void start_for_step(FILE *r, int level, char *var, int from, int to, int step);
 void start_while(FILE *r, int level, char *cmp1, char *operator, char *cmp2);
-void start_while_true(FILE *r, int level);
+void start_while_true(FILE *r, int level, char *cond);
 void start_main(FILE *r, char *name);
 
 void declaration(FILE *r, int level, char *name, char *value);

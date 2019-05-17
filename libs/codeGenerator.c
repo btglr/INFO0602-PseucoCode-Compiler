@@ -4,6 +4,10 @@
 void include_librairies(FILE *r) {
     fprintf(r, "#include <stdio.h>\n");
     fprintf(r, "#include <stdlib.h>\n\n");
+
+    fprintf(r, "#define bool int\n");
+    fprintf(r, "#define true 1\n");
+    fprintf(r, "#define false 0\n\n");
 }
 
 void start_void_function(FILE *r, char *name, function_t *func) {
@@ -16,8 +20,11 @@ void start_function(FILE *r, char *name, function_t *func, variable_type return_
 
     switch (return_type) {
         case TYPE_INT:
-        case TYPE_BOOLEAN:
             fprintf(r, "int ");
+            break;
+
+        case TYPE_BOOLEAN:
+            fprintf(r, "bool ");
             break;
         
         case TYPE_VOID:
@@ -27,8 +34,12 @@ void start_function(FILE *r, char *name, function_t *func, variable_type return_
 
     fprintf(r, "%s(", name);
     for (i = 0; i < func->nbArguments; ++i) {
-        if (func->arguments[i]->type == TYPE_INT || func->arguments[i]->type == TYPE_BOOLEAN) {
+        if (func->arguments[i]->type == TYPE_INT) {
             strcpy(type, "int");
+        }
+
+        else if (func->arguments[i]->type == TYPE_BOOLEAN) {
+            strcpy(type, "bool");
         }
 
         else {
@@ -71,9 +82,9 @@ void start_while(FILE *r, int level, char *cmp1, char *operator, char *cmp2) {
     fprintf(r, "while (%s %s %s) {\n", cmp1, operator, cmp2);
 }
 
-void start_while_true(FILE *r, int level) {
+void start_while_true(FILE *r, int level, char *cond) {
     print_tabs(r, level);
-    fprintf(r, "while (1) {\n");
+    fprintf(r, "while (%s) {\n", cond);
 }
 
 void start_main(FILE *r, char *name) {
